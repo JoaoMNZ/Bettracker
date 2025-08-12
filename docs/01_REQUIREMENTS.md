@@ -15,7 +15,7 @@ Functional requirements describe the system's features and functions.
 ### FR - Bet Management
 * **FR05:** The system must allow a bettor to create, edit, and delete their own custom lists of bookmakers, tipsters, sports, and competitions.
 * **FR06:** The system must allow a bettor to set their betting unit value.
-* **FR07:** The system must allow a bettor to log a bet containing the following fields: Title, Selection, Bookmaker, Tipster, Sport, Competition, Stake (as a value or unit percentage), Odds, Status (Pending, Won, Lost, Push, Half Won, Half Lost, Cashout, and Void), and Date/Time.
+* **FR07:** The system must allow a bettor to log a bet containing the following fields: Title, Selection, Bookmaker, Tipster, Sport, Competition, Stake, Stake type(as a value or unit percentage), Odds, Status (Pending, Won, Lost, Push, Half Won, Half Lost, Cashout, and Void), and Date/Time.
 * **FR08:** The system must allow a bettor to log deposit and withdrawal transactions for each bookmaker.
 
 ### FR - Data Visualization & Analysis
