@@ -1,0 +1,1 @@
+INSERT INTO bettor(name, email, password) values('João', 'bettracker@hotmail.com', 'bettracker');
