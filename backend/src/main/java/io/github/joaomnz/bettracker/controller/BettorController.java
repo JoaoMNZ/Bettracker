@@ -4,8 +4,10 @@ import io.github.joaomnz.bettracker.dto.auth.LoginResponseDTO;
 import io.github.joaomnz.bettracker.dto.auth.RegisterRequestDTO;
 import io.github.joaomnz.bettracker.dto.bettor.BettorResponseDTO;
 import io.github.joaomnz.bettracker.model.Bettor;
+import io.github.joaomnz.bettracker.security.BettorDetails;
+import io.github.joaomnz.bettracker.security.JwtTokenService;
 import io.github.joaomnz.bettracker.service.BettorService;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -13,18 +15,24 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 
-@RequestMapping("/api/v1")
+@RequestMapping("/api/v1/users")
 @RestController
 public class BettorController {
-    @Autowired
-    BettorService bettorService;
+    private final BettorService bettorService;
+    private final JwtTokenService jwtTokenService;
 
-    @PostMapping("/auth/register")
-    public ResponseEntity<LoginResponseDTO> createUser(@RequestBody RegisterRequestDTO newUser){
-        Bettor createdBettor = bettorService.createBettor(newUser);
-        String token = bettorService.generateTokenForBettor(createdBettor);
+    public BettorController(BettorService bettorService,
+                            JwtTokenService jwtTokenService) {
+        this.bettorService = bettorService;
+        this.jwtTokenService = jwtTokenService;
+    }
 
-        LoginResponseDTO loginResponseDTO = new LoginResponseDTO(
+    @PostMapping("/register")
+    public ResponseEntity<LoginResponseDTO> register(@Valid @RequestBody RegisterRequestDTO registerRequest){
+        Bettor createdBettor = bettorService.register(registerRequest);
+        String token = jwtTokenService.generateToken(new BettorDetails(createdBettor));
+
+        LoginResponseDTO response = new LoginResponseDTO(
                 token,
                 createdBettor.getId(),
                 createdBettor.getName(),
@@ -32,16 +40,16 @@ public class BettorController {
                 createdBettor.getType()
         );
 
-        URI locationOfNewBettor = ServletUriComponentsBuilder
+        URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(createdBettor.getId()).toUri();
 
-        return ResponseEntity.created(locationOfNewBettor).body(loginResponseDTO);
+        return ResponseEntity.created(location).body(response);
     }
 
-    @GetMapping("/users/me")
-    public ResponseEntity<BettorResponseDTO> getCurrentUser(Authentication authentication) {
+    @GetMapping("/me")
+    public ResponseEntity<BettorResponseDTO> getMe(Authentication authentication) {
         Bettor bettor = bettorService.findByEmail(authentication.getName());
         BettorResponseDTO responseDTO = new BettorResponseDTO(
                 bettor.getId(),
