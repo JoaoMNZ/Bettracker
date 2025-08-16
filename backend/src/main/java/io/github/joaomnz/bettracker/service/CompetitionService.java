@@ -1,0 +1,24 @@
+package io.github.joaomnz.bettracker.service;
+
+import io.github.joaomnz.bettracker.dto.competition.CompetitionRequestDTO;
+import io.github.joaomnz.bettracker.model.Competition;
+import io.github.joaomnz.bettracker.model.Sport;
+import io.github.joaomnz.bettracker.repository.CompetitionRepository;
+import org.springframework.stereotype.Service;
+
+@Service
+public class CompetitionService {
+    private final CompetitionRepository competitionRepository;
+
+    public CompetitionService(CompetitionRepository competitionRepository) {
+        this.competitionRepository = competitionRepository;
+    }
+
+    public Competition create(CompetitionRequestDTO request, Sport parentSport){
+        Competition newCompetition = new Competition();
+        newCompetition.setName(request.name());
+        newCompetition.setSport(parentSport);
+        newCompetition.setBettor(parentSport.getBettor());
+        return competitionRepository.save(newCompetition);
+    }
+}
