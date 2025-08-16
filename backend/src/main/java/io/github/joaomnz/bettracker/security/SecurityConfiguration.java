@@ -30,6 +30,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/tipsters").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/sports").authenticated()
                         .anyRequest().denyAll()
                 )
                 .addFilterBefore(bettorAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
