@@ -2,6 +2,7 @@ package io.github.joaomnz.bettracker.controller.advice;
 
 import io.github.joaomnz.bettracker.dto.shared.ErrorResponseDTO;
 import io.github.joaomnz.bettracker.exceptions.EmailAlreadyExistsException;
+import io.github.joaomnz.bettracker.exceptions.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,5 +43,18 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.badRequest().body(errorResponseDTO);
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponseDTO> handleResourceNotFoundException(ResourceNotFoundException ex, HttpServletRequest request){
+        ErrorResponseDTO errorResponseDTO = new ErrorResponseDTO(
+                Instant.now(),
+                HttpStatus.NOT_FOUND.value(),
+                "Not Found",
+                ex.getMessage(),
+                null,
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponseDTO);
     }
 }
