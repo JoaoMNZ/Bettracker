@@ -23,8 +23,8 @@ public class CompetitionService {
         return competitionRepository.save(newCompetition);
     }
 
-    public Competition findByIdAndSport(Long competitionId, Sport parentSport){
-        return competitionRepository.findByIdAndSport(competitionId, parentSport)
-                .orElseThrow(() -> new ResourceNotFoundException("Competition not found with id " + competitionId + " for this sport."));
+    public Competition findByIdAndSport(Long id, Sport parentSport){
+        return competitionRepository.findByIdAndSport(id, parentSport)
+                .orElseThrow(() -> new ResourceNotFoundException("Competition not found with id " + id + " for this sport."));
     }
 }
