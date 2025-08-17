@@ -1,6 +1,7 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.competition.CompetitionRequestDTO;
+import io.github.joaomnz.bettracker.exceptions.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.Competition;
 import io.github.joaomnz.bettracker.model.Sport;
 import io.github.joaomnz.bettracker.repository.CompetitionRepository;
@@ -20,5 +21,10 @@ public class CompetitionService {
         newCompetition.setSport(parentSport);
         newCompetition.setBettor(parentSport.getBettor());
         return competitionRepository.save(newCompetition);
+    }
+
+    public Competition findByIdAndSport(Long competitionId, Sport parentSport){
+        return competitionRepository.findByIdAndSport(competitionId, parentSport)
+                .orElseThrow(() -> new ResourceNotFoundException("Competition not found with id " + competitionId + " for this sport."));
     }
 }

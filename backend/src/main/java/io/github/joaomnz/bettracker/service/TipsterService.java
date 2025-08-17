@@ -1,6 +1,7 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.tipster.TipsterRequestDTO;
+import io.github.joaomnz.bettracker.exceptions.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.Bettor;
 import io.github.joaomnz.bettracker.model.Tipster;
 import io.github.joaomnz.bettracker.repository.TipsterRepository;
@@ -19,5 +20,10 @@ public class TipsterService {
         newTipster.setName(request.name());
         newTipster.setBettor(currentBettor);
         return tipsterRepository.save(newTipster);
+    }
+
+    public Tipster findByIdAndBettor(Long tipsterId, Bettor curentBettor){
+        return tipsterRepository.findByIdAndBettor(tipsterId, curentBettor)
+                .orElseThrow(() -> new ResourceNotFoundException("Tipster not found with id " + tipsterId + " for this bettor."));
     }
 }
