@@ -22,8 +22,8 @@ public class BookmakerService {
         return bookmakerRepository.save(newBookmaker);
     }
 
-    public Bookmaker findByIdAndBettor(Long bookmakerId, Bettor currentBettor){
-        return bookmakerRepository.findByIdAndBettor(bookmakerId, currentBettor)
-                .orElseThrow(() -> new ResourceNotFoundException("Bookmaker not found with id " + bookmakerId + " for this bettor."));
+    public Bookmaker findByIdAndBettor(Long id, Bettor currentBettor){
+        return bookmakerRepository.findByIdAndBettor(id, currentBettor)
+                .orElseThrow(() -> new ResourceNotFoundException("Bookmaker not found with id " + id + " for this bettor."));
     }
 }

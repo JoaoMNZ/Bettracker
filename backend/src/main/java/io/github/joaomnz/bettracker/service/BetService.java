@@ -1,6 +1,7 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.bet.CreateBetRequestDTO;
+import io.github.joaomnz.bettracker.exceptions.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.*;
 import io.github.joaomnz.bettracker.model.enums.BetStatus;
 import io.github.joaomnz.bettracker.model.enums.StakeType;
@@ -42,5 +43,15 @@ public class BetService {
         newBet.setCompetition(associatedCompetition);
 
         return betRepository.save(newBet);
+    }
+
+    public void delete(Long id, Bettor currentBettor){
+        Bet bet = findByIdAndBettor(id, currentBettor);
+        betRepository.delete(bet);
+    }
+
+    public Bet findByIdAndBettor(Long id, Bettor currentBettor){
+        return betRepository.findByIdAndBettor(id, currentBettor)
+                .orElseThrow(() -> new ResourceNotFoundException("Bet not found with id " + id + " for this bettor."));
     }
 }

@@ -38,9 +38,9 @@ public class BetControllerIT {
     private final String BETS_API_URI = "/api/v1/bets";
 
     @Test
-    @DisplayName("Should create a bet when authenticated and bookmaker belongs to the user")
+    @DisplayName("Should create a bet when authenticated and bookmaker belongs to the bettor")
     void shouldCreateBetWhenAuthenticatedAndBookmakerIsValid() {
-        String token = registerUserAndGetToken("joao.menezes21@Outlook.com");
+        String token = registerBettorAndGetToken("joao.menezes21@Outlook.com");
         Long bookmakerId = createBookmaker(token, "Bet365");
         Long tipsterId = createTipster(token, "Pei!");
         Long sportId = createSport(token, "Football");
@@ -77,20 +77,20 @@ public class BetControllerIT {
     }
 
     @Test
-    @DisplayName("Should return 404 Not Found when trying to create a bet with a bookmaker from another user")
-    void shouldReturnNotFoundWhenBookmakerBelongsToAnotherUser() {
-        String tokenUserA = registerUserAndGetToken("userA@email.com");
-        Long bookmakerIdUserA = createBookmaker(tokenUserA, "Bookmaker of A");
+    @DisplayName("Should return 404 Not Found when trying to create a bet with a bookmaker from another bettor")
+    void shouldReturnNotFoundWhenBookmakerBelongsToAnotherBettor() {
+        String tokenBettorA = registerBettorAndGetToken("userA@email.com");
+        Long bookmakerIdBettorA = createBookmaker(tokenBettorA, "Bookmaker of A");
 
-        String tokenUserB = registerUserAndGetToken("userB@email.com");
+        String tokenBettorB = registerBettorAndGetToken("userB@email.com");
 
         CreateBetRequestDTO request = new CreateBetRequestDTO(
                 "Invalid Bet", "Any selection", BigDecimal.TEN, StakeType.VALUE, BigDecimal.TEN,
-                null, null, bookmakerIdUserA, null, null, null
+                null, null, bookmakerIdBettorA, null, null, null
         );
 
         HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(tokenUserB);
+        headers.setBearerAuth(tokenBettorB);
         HttpEntity<CreateBetRequestDTO> httpEntity = new HttpEntity<>(request, headers);
 
         ResponseEntity<ErrorResponseDTO> response = testRestTemplate
@@ -98,10 +98,54 @@ public class BetControllerIT {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().message()).isEqualTo("Bookmaker not found with id " + bookmakerIdUserA + " for this bettor.");
+        assertThat(response.getBody().message()).isEqualTo("Bookmaker not found with id " + bookmakerIdBettorA + " for this bettor.");
     }
 
-    private String registerUserAndGetToken(String email) {
+    @Test
+    @DisplayName("Should delete a bet when authenticated bettor is the owner")
+    void shouldDeleteBetWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("user.to.delete@email.com");
+        Long betId = createSimpleBetAndGetId(token);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                BETS_API_URI + "/" + betId,
+                HttpMethod.DELETE,
+                httpEntity,
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to delete a bet from another bettor")
+    void shouldReturnNotFound_whenDeletingBetFromAnotherBettor() {
+        String tokenBettorA = registerBettorAndGetToken("userA.delete@email.com");
+        Long betIdBettorA = createSimpleBetAndGetId(tokenBettorA);
+
+        String tokenBettorB = registerBettorAndGetToken("userB.delete@email.com");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenBettorB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                BETS_API_URI + "/" + betIdBettorA,
+                HttpMethod.DELETE,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("Bet not found with id " + betIdBettorA + " for this bettor.");
+    }
+
+    private String registerBettorAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("Test User", email, "Password123!");
         ResponseEntity<LoginResponseDTO> response =
                 testRestTemplate.postForEntity("/api/v1/users/register", bettor, LoginResponseDTO.class);
@@ -160,6 +204,22 @@ public class BetControllerIT {
         ResponseEntity<CompetitionResponseDTO> response = testRestTemplate
                 .exchange(SPORTS_API_URI + "/" + sportId + "/competitions", HttpMethod.POST, httpEntity, CompetitionResponseDTO.class);
 
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).isNotNull();
+        return response.getBody().id();
+    }
+
+    private Long createSimpleBetAndGetId(String token) {
+        CreateBetRequestDTO request = new CreateBetRequestDTO(
+                "Simple Bet", "Any Selection", new BigDecimal("10"), StakeType.VALUE,
+                new BigDecimal("1.5"), null, null, null, null, null, null
+        );
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<CreateBetRequestDTO> httpEntity = new HttpEntity<>(request, headers);
+        ResponseEntity<CreateBetResponseDTO> response = testRestTemplate.exchange(
+                BETS_API_URI, HttpMethod.POST, httpEntity, CreateBetResponseDTO.class
+        );
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
         return response.getBody().id();

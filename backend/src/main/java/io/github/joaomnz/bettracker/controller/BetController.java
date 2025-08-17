@@ -6,12 +6,10 @@ import io.github.joaomnz.bettracker.model.*;
 import io.github.joaomnz.bettracker.security.BettorDetails;
 import io.github.joaomnz.bettracker.service.*;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
@@ -75,5 +73,15 @@ public class BetController {
                 .toUri();
 
         return ResponseEntity.created(location).body(responseDTO);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id, Authentication authentication){
+        BettorDetails principal = (BettorDetails) authentication.getPrincipal();
+        Bettor currentBettor = principal.getBettor();
+
+        betService.delete(id, currentBettor);
+
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 }

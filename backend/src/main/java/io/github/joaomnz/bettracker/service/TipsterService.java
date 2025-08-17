@@ -22,8 +22,8 @@ public class TipsterService {
         return tipsterRepository.save(newTipster);
     }
 
-    public Tipster findByIdAndBettor(Long tipsterId, Bettor curentBettor){
-        return tipsterRepository.findByIdAndBettor(tipsterId, curentBettor)
-                .orElseThrow(() -> new ResourceNotFoundException("Tipster not found with id " + tipsterId + " for this bettor."));
+    public Tipster findByIdAndBettor(Long id, Bettor curentBettor){
+        return tipsterRepository.findByIdAndBettor(id, curentBettor)
+                .orElseThrow(() -> new ResourceNotFoundException("Tipster not found with id " + id + " for this bettor."));
     }
 }

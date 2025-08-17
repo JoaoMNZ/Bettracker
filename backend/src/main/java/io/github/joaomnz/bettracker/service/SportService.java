@@ -22,8 +22,8 @@ public class SportService {
         return sportRepository.save(newSport);
     }
 
-    public Sport findByIdAndBettor(Long sportId, Bettor currentBettor){
-        return sportRepository.findByIdAndBettor(sportId, currentBettor)
-                .orElseThrow(() -> new ResourceNotFoundException("Sport not found with id " + sportId + " for this bettor."));
+    public Sport findByIdAndBettor(Long id, Bettor currentBettor){
+        return sportRepository.findByIdAndBettor(id, currentBettor)
+                .orElseThrow(() -> new ResourceNotFoundException("Sport not found with id " + id + " for this bettor."));
     }
 }
