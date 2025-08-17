@@ -3,10 +3,7 @@ package io.github.joaomnz.bettracker.model;
 import io.github.joaomnz.bettracker.model.enums.BetStatus;
 import io.github.joaomnz.bettracker.model.enums.StakeType;
 import jakarta.persistence.*;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -17,6 +14,7 @@ import java.time.LocalDateTime;
 @Setter
 @EqualsAndHashCode(of = "id")
 @ToString
+@Builder
 public class Bet {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
