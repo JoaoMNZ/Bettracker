@@ -5,15 +5,16 @@ import io.github.joaomnz.bettracker.model.enums.StakeType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record UpdateBetRequestDTO(
-        @NotBlank(message = "Title cannot be blank if provided.")
+        @Size(min = 1, max = 255, message = "Title must be between 1 and 255 characters.")
         String title,
 
-        @NotBlank(message = "Selection cannot be blank if provided.")
+        @Size(min = 1, max = 255, message = "Selection must be between 1 and 255 characters.")
         String selection,
 
         @Positive(message = "Stake must be positive.")

@@ -4,6 +4,7 @@ import io.github.joaomnz.bettracker.dto.auth.LoginResponseDTO;
 import io.github.joaomnz.bettracker.dto.auth.RegisterRequestDTO;
 import io.github.joaomnz.bettracker.dto.bet.CreateBetRequestDTO;
 import io.github.joaomnz.bettracker.dto.bet.BetResponseDTO;
+import io.github.joaomnz.bettracker.dto.bet.UpdateBetRequestDTO;
 import io.github.joaomnz.bettracker.dto.bookmaker.BookmakerRequestDTO;
 import io.github.joaomnz.bettracker.dto.bookmaker.BookmakerResponseDTO;
 import io.github.joaomnz.bettracker.dto.competition.CompetitionRequestDTO;
@@ -13,6 +14,7 @@ import io.github.joaomnz.bettracker.dto.sport.SportRequestDTO;
 import io.github.joaomnz.bettracker.dto.sport.SportResponseDTO;
 import io.github.joaomnz.bettracker.dto.tipster.TipsterRequestDTO;
 import io.github.joaomnz.bettracker.dto.tipster.TipsterResponseDTO;
+import io.github.joaomnz.bettracker.model.enums.BetStatus;
 import io.github.joaomnz.bettracker.model.enums.StakeType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -143,6 +145,65 @@ public class BetControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().message()).isEqualTo("Bet not found with id " + betIdBettorA + " for this bettor.");
+    }
+
+    @Test
+    @DisplayName("Should update a bet when authenticated bettor is the owner")
+    void updateBetWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("bettor.to.update@email.com");
+        Long betId = createSimpleBetAndGetId(token);
+
+        UpdateBetRequestDTO updateRequest = new UpdateBetRequestDTO(
+                null,
+                null,
+                new BigDecimal("50.00"),
+                null, null,
+                BetStatus.WON,
+                null, null, null, null, null
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<UpdateBetRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<BetResponseDTO> response = testRestTemplate.exchange(
+                BETS_API_URI + "/" + betId,
+                HttpMethod.PATCH,
+                httpEntity,
+                BetResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().stake()).isEqualTo(new BigDecimal("50.00"));
+        assertThat(response.getBody().status()).isEqualTo(BetStatus.WON);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to update a bet from another bettor")
+    void updateBetWhenBettorIsNotOwner() {
+        String tokenBettorA = registerBettorAndGetToken("bettorA.update@email.com");
+        Long betIdBettorA = createSimpleBetAndGetId(tokenBettorA);
+
+        String tokenBettorB = registerBettorAndGetToken("bettorB.update@email.com");
+
+        UpdateBetRequestDTO updateRequest = new UpdateBetRequestDTO(
+                null, null, null, null, null, BetStatus.LOST, null, null, null, null, null
+        );
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenBettorB);
+        HttpEntity<UpdateBetRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                BETS_API_URI + "/" + betIdBettorA,
+                HttpMethod.PATCH,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).contains("Bet not found with id " + betIdBettorA);
     }
 
     private String registerBettorAndGetToken(String email) {

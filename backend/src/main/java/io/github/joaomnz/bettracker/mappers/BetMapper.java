@@ -14,8 +14,12 @@ import java.time.LocalDateTime;
 
 @Mapper(componentModel = "spring")
 public interface BetMapper {
-    @Mapping(target = "bettor", source = "bettor")
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "bettor", source = "bettor")
+    @Mapping(target = "bookmaker", source = "bookmaker")
+    @Mapping(target = "tipster", source = "tipster")
+    @Mapping(target = "sport", source = "sport")
+    @Mapping(target = "competition", source = "competition")
     Bet toEntity(CreateBetRequestDTO requestDTO,
                  Bookmaker bookmaker,
                  Tipster tipster,
