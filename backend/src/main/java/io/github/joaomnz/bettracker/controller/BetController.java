@@ -1,7 +1,9 @@
 package io.github.joaomnz.bettracker.controller;
 
+import io.github.joaomnz.bettracker.dto.bet.BetResponseDTO;
 import io.github.joaomnz.bettracker.dto.bet.CreateBetRequestDTO;
-import io.github.joaomnz.bettracker.dto.bet.CreateBetResponseDTO;
+import io.github.joaomnz.bettracker.dto.bet.UpdateBetRequestDTO;
+import io.github.joaomnz.bettracker.mappers.BetMapper;
 import io.github.joaomnz.bettracker.model.*;
 import io.github.joaomnz.bettracker.security.BettorDetails;
 import io.github.joaomnz.bettracker.service.*;
@@ -23,20 +25,24 @@ public class BetController {
     private final SportService sportService;
     private final CompetitionService competitionService;
 
+    private final BetMapper betMapper;
+
     public BetController(BetService betService,
                          BookmakerService bookmakerService,
                          TipsterService tipsterService,
                          SportService sportService,
-                         CompetitionService competitionService) {
+                         CompetitionService competitionService,
+                         BetMapper betMapper) {
         this.betService = betService;
         this.bookmakerService = bookmakerService;
         this.tipsterService = tipsterService;
         this.sportService = sportService;
         this.competitionService = competitionService;
+        this.betMapper = betMapper;
     }
 
     @PostMapping
-    public ResponseEntity<CreateBetResponseDTO> create(@Valid @RequestBody CreateBetRequestDTO request, Authentication authentication){
+    public ResponseEntity<BetResponseDTO> create(@Valid @RequestBody CreateBetRequestDTO request, Authentication authentication){
         BettorDetails principal = (BettorDetails) authentication.getPrincipal();
         Bettor currentBettor = principal.getBettor();
 
@@ -45,26 +51,12 @@ public class BetController {
         Sport associatedSport = null;
         Competition associatedCompetition = null;
 
-        if(request.BookmakerId() != null) associatedBookmaker = bookmakerService.findByIdAndBettor(request.BookmakerId(), currentBettor);
+        if(request.bookmakerId() != null) associatedBookmaker = bookmakerService.findByIdAndBettor(request.bookmakerId(), currentBettor);
         if(request.tipsterId() != null) associatedTipster = tipsterService.findByIdAndBettor(request.tipsterId(), currentBettor);
         if(request.sportId() != null) associatedSport = sportService.findByIdAndBettor(request.sportId(), currentBettor);
         if(request.competitionId() != null && associatedSport != null) associatedCompetition = competitionService.findByIdAndSport(request.competitionId(), associatedSport);
-
         Bet createdBet = betService.create(request, associatedBookmaker, associatedTipster, associatedSport, associatedCompetition, currentBettor);
-
-        CreateBetResponseDTO responseDTO = new CreateBetResponseDTO(
-                createdBet.getId(),
-                createdBet.getTitle(),
-                createdBet.getSelection(),
-                createdBet.getStake(),
-                createdBet.getOdds(),
-                createdBet.getStatus(),
-                createdBet.getEventDate(),
-                associatedBookmaker != null ? associatedBookmaker.getName() : null,
-                associatedTipster != null ? associatedTipster.getName() : null,
-                associatedSport != null ? associatedSport.getName() : null,
-                associatedCompetition != null ? associatedCompetition.getName() : null
-        );
+        BetResponseDTO responseDTO = betMapper.toDto(createdBet);
 
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
@@ -73,6 +65,28 @@ public class BetController {
                 .toUri();
 
         return ResponseEntity.created(location).body(responseDTO);
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<BetResponseDTO> update(@PathVariable Long id, @Valid @RequestBody UpdateBetRequestDTO request, Authentication authentication) {
+        BettorDetails principal = (BettorDetails) authentication.getPrincipal();
+        Bettor currentBettor = principal.getBettor();
+
+        Bookmaker associatedBookmaker = null;
+        Tipster associatedTipster = null;
+        Sport associatedSport = null;
+        Competition associatedCompetition = null;
+
+        if (request.bookmakerId() != null) associatedBookmaker = bookmakerService.findByIdAndBettor(request.bookmakerId(), currentBettor);
+        if (request.tipsterId() != null) associatedTipster = tipsterService.findByIdAndBettor(request.tipsterId(), currentBettor);
+        if (request.sportId() != null) associatedSport = sportService.findByIdAndBettor(request.sportId(), currentBettor);
+        if (request.competitionId() != null && associatedSport != null) associatedCompetition = competitionService.findByIdAndSport(request.competitionId(), associatedSport);
+
+        Bet updatedBet = betService.update(id, request, associatedBookmaker, associatedTipster, associatedSport, associatedCompetition, currentBettor);
+
+        BetResponseDTO responseDTO = betMapper.toDto(updatedBet);
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
     }
 
     @DeleteMapping("/{id}")

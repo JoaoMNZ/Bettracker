@@ -5,7 +5,7 @@ import io.github.joaomnz.bettracker.model.enums.BetStatus;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-public record CreateBetResponseDTO(
+public record BetResponseDTO(
         Long id,
         String title,
         String selection,
