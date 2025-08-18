@@ -4,32 +4,28 @@ import io.github.joaomnz.bettracker.model.enums.BetStatus;
 import io.github.joaomnz.bettracker.model.enums.StakeType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-public record CreateBetRequestDTO(
+public record UpdateBetRequestDTO(
+        @NotBlank(message = "Title cannot be blank if provided.")
         String title,
 
-        @NotBlank(message = "The selection is required.")
+        @NotBlank(message = "Selection cannot be blank if provided.")
         String selection,
 
         @Positive(message = "Stake must be positive.")
-        @NotNull(message = "Stake cannot be null.")
         BigDecimal stake,
 
         StakeType stakeType,
 
-        @DecimalMin(value = "1.01", message = "Odds must be greater than 1.00")
-        @NotNull(message = "Odds cannot be null.")
+        @DecimalMin(value = "1.01", message = "Odds must be greater than 1.00.")
         BigDecimal odds,
 
         BetStatus status,
-
         LocalDateTime eventDate,
-
         Long bookmakerId,
         Long tipsterId,
         Long sportId,

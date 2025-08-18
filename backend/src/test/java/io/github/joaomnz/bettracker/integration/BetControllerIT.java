@@ -3,7 +3,7 @@ package io.github.joaomnz.bettracker.integration;
 import io.github.joaomnz.bettracker.dto.auth.LoginResponseDTO;
 import io.github.joaomnz.bettracker.dto.auth.RegisterRequestDTO;
 import io.github.joaomnz.bettracker.dto.bet.CreateBetRequestDTO;
-import io.github.joaomnz.bettracker.dto.bet.CreateBetResponseDTO;
+import io.github.joaomnz.bettracker.dto.bet.BetResponseDTO;
 import io.github.joaomnz.bettracker.dto.bookmaker.BookmakerRequestDTO;
 import io.github.joaomnz.bettracker.dto.bookmaker.BookmakerResponseDTO;
 import io.github.joaomnz.bettracker.dto.competition.CompetitionRequestDTO;
@@ -64,8 +64,8 @@ public class BetControllerIT {
         headers.setBearerAuth(token);
         HttpEntity<CreateBetRequestDTO> httpEntity = new HttpEntity<>(request, headers);
 
-        ResponseEntity<CreateBetResponseDTO> response = testRestTemplate
-                .exchange(BETS_API_URI, HttpMethod.POST, httpEntity, CreateBetResponseDTO.class);
+        ResponseEntity<BetResponseDTO> response = testRestTemplate
+                .exchange(BETS_API_URI, HttpMethod.POST, httpEntity, BetResponseDTO.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
@@ -217,8 +217,8 @@ public class BetControllerIT {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
         HttpEntity<CreateBetRequestDTO> httpEntity = new HttpEntity<>(request, headers);
-        ResponseEntity<CreateBetResponseDTO> response = testRestTemplate.exchange(
-                BETS_API_URI, HttpMethod.POST, httpEntity, CreateBetResponseDTO.class
+        ResponseEntity<BetResponseDTO> response = testRestTemplate.exchange(
+                BETS_API_URI, HttpMethod.POST, httpEntity, BetResponseDTO.class
         );
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();

@@ -14,7 +14,6 @@ import java.time.LocalDateTime;
 @Setter
 @EqualsAndHashCode(of = "id")
 @ToString
-@Builder
 public class Bet {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

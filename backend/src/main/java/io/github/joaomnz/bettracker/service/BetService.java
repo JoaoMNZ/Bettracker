@@ -1,10 +1,10 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.bet.CreateBetRequestDTO;
+import io.github.joaomnz.bettracker.dto.bet.UpdateBetRequestDTO;
 import io.github.joaomnz.bettracker.exceptions.ResourceNotFoundException;
+import io.github.joaomnz.bettracker.mappers.BetMapper;
 import io.github.joaomnz.bettracker.model.*;
-import io.github.joaomnz.bettracker.model.enums.BetStatus;
-import io.github.joaomnz.bettracker.model.enums.StakeType;
 import io.github.joaomnz.bettracker.repository.BetRepository;
 import org.springframework.stereotype.Service;
 
@@ -14,8 +14,11 @@ import java.time.LocalDateTime;
 public class BetService {
     private final BetRepository betRepository;
 
-    public BetService(BetRepository betRepository) {
+    private final BetMapper betMapper;
+
+    public BetService(BetRepository betRepository, BetMapper betMapper) {
         this.betRepository = betRepository;
+        this.betMapper = betMapper;
     }
 
     public Bet create(CreateBetRequestDTO request,
@@ -24,25 +27,32 @@ public class BetService {
                       Sport associatedSport,
                       Competition associatedCompetition,
                       Bettor currentBettor){
-        StakeType stakeType = request.stakeType() != null ? request.stakeType() : StakeType.VALUE;
-        BetStatus status = request.status() != null ? request.status() : BetStatus.PENDING;
-        LocalDateTime eventDate = request.eventDate() != null ? request.eventDate() : LocalDateTime.now();
-
-        Bet newBet = new Bet();
-        newBet.setTitle(request.title());
-        newBet.setSelection(request.selection());
-        newBet.setStake(request.stake());
-        newBet.setStakeType(stakeType);
-        newBet.setOdds(request.odds());
-        newBet.setStatus(status);
-        newBet.setEventDate(eventDate);
-        newBet.setBettor(currentBettor);
-        newBet.setBookmaker(associatedBookmaker);
-        newBet.setTipster(associatedTipster);
-        newBet.setSport(associatedSport);
-        newBet.setCompetition(associatedCompetition);
-
+        Bet newBet = betMapper.toEntity(request, associatedBookmaker, associatedTipster, associatedSport, associatedCompetition, currentBettor);
         return betRepository.save(newBet);
+    }
+
+    public Bet update(Long betId,
+                       UpdateBetRequestDTO request,
+                       Bookmaker associatedBookmaker,
+                       Tipster associatedTipster,
+                       Sport associatedSport,
+                       Competition associatedCompetition,
+                       Bettor currentBettor){
+        Bet betToUpdate = findByIdAndBettor(betId, currentBettor);
+
+        if(request.title() != null) betToUpdate.setTitle(request.title());
+        if(request.selection() != null) betToUpdate.setSelection(request.selection());
+        if(request.stake() != null) betToUpdate.setStake(request.stake());
+        if(request.stakeType() != null) betToUpdate.setStakeType(request.stakeType());
+        if(request.odds() != null) betToUpdate.setOdds(request.odds());
+        if(request.status() != null) betToUpdate.setStatus(request.status());
+        if(request.eventDate() != null) betToUpdate.setEventDate(request.eventDate());
+        if(associatedBookmaker != null) betToUpdate.setBookmaker(associatedBookmaker);
+        if(associatedTipster != null) betToUpdate.setTipster(associatedTipster);
+        if(associatedSport != null) betToUpdate.setSport(associatedSport);
+        if(associatedCompetition != null) betToUpdate.setCompetition(associatedCompetition);
+
+        return betRepository.save(betToUpdate);
     }
 
     public void delete(Long id, Bettor currentBettor){
