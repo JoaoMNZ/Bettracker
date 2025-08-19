@@ -3,11 +3,14 @@ package io.github.joaomnz.bettracker.controller;
 import io.github.joaomnz.bettracker.dto.bet.BetResponseDTO;
 import io.github.joaomnz.bettracker.dto.bet.CreateBetRequestDTO;
 import io.github.joaomnz.bettracker.dto.bet.UpdateBetRequestDTO;
-import io.github.joaomnz.bettracker.mappers.BetMapper;
+import io.github.joaomnz.bettracker.dto.shared.PageResponseDTO;
+import io.github.joaomnz.bettracker.mapper.BetMapper;
 import io.github.joaomnz.bettracker.model.*;
 import io.github.joaomnz.bettracker.security.BettorDetails;
 import io.github.joaomnz.bettracker.service.*;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.util.List;
 
 @RequestMapping("/api/v1/bets")
 @RestController
@@ -39,6 +43,39 @@ public class BetController {
         this.sportService = sportService;
         this.competitionService = competitionService;
         this.betMapper = betMapper;
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<BetResponseDTO> findById(@PathVariable Long id, Authentication authentication){
+        BettorDetails principal = (BettorDetails) authentication.getPrincipal();
+        Bettor currentBettor = principal.getBettor();
+
+        Bet foundBet = betService.findByIdAndBettor(id, currentBettor);
+
+        BetResponseDTO responseDTO = betMapper.toDto(foundBet);
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
+    }
+
+    @GetMapping
+    public ResponseEntity<PageResponseDTO<BetResponseDTO>> findAll(Pageable pageable, Authentication authentication){
+        BettorDetails principal = (BettorDetails) authentication.getPrincipal();
+        Bettor currentBettor = principal.getBettor();
+        Page<Bet> betsPage = betService.findAllByBettor(currentBettor, pageable);
+
+        List<BetResponseDTO> betsDTO = betsPage.getContent().stream()
+                .map(betMapper::toDto)
+                .toList();
+
+        PageResponseDTO<BetResponseDTO> responseDTO = new PageResponseDTO<>(
+                betsDTO,
+                betsPage.getNumber(),
+                betsPage.getSize(),
+                betsPage.getTotalElements(),
+                betsPage.getTotalPages()
+        );
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
     }
 
     @PostMapping
