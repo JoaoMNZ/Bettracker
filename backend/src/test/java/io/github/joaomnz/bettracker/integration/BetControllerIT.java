@@ -10,6 +10,7 @@ import io.github.joaomnz.bettracker.dto.bookmaker.BookmakerResponseDTO;
 import io.github.joaomnz.bettracker.dto.competition.CompetitionRequestDTO;
 import io.github.joaomnz.bettracker.dto.competition.CompetitionResponseDTO;
 import io.github.joaomnz.bettracker.dto.shared.ErrorResponseDTO;
+import io.github.joaomnz.bettracker.dto.shared.PageResponseDTO;
 import io.github.joaomnz.bettracker.dto.sport.SportRequestDTO;
 import io.github.joaomnz.bettracker.dto.sport.SportResponseDTO;
 import io.github.joaomnz.bettracker.dto.tipster.TipsterRequestDTO;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -38,6 +40,106 @@ public class BetControllerIT {
     private final String TIPSTERS_API_URI = "/api/v1/tipsters";
     private final String SPORTS_API_URI = "/api/v1/sports";
     private final String BETS_API_URI = "/api/v1/bets";
+
+    @Test
+    @DisplayName("Should return a single bet when bettor is the owner")
+    void findByIdWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("user.get.one@email.com");
+        Long betId = createSimpleBetAndGetId(token, "Specific Bet");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<BetResponseDTO> response = testRestTemplate.exchange(
+                BETS_API_URI + "/" + betId,
+                HttpMethod.GET,
+                httpEntity,
+                BetResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().id()).isEqualTo(betId);
+        assertThat(response.getBody().selection()).isEqualTo("Specific Bet");
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to get a bet from another bettor")
+    void findByIdWhenBettorIsNotOwner() {
+        String tokenUserA = registerBettorAndGetToken("userA.get@email.com");
+        Long betIdUserA = createSimpleBetAndGetId(tokenUserA, "Bet of A");
+
+        String tokenUserB = registerBettorAndGetToken("userB.get@email.com");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenUserB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                BETS_API_URI + "/" + betIdUserA,
+                HttpMethod.GET,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("Should return a paginated list of bets for the authenticated bettor")
+    void findAllWhenAuthenticated() {
+        String token = registerBettorAndGetToken("user.get.all@email.com");
+        createSimpleBetAndGetId(token, "Bet 1");
+        createSimpleBetAndGetId(token, "Bet 2");
+        createSimpleBetAndGetId(token, "Bet 3");
+        createSimpleBetAndGetId(token, "Bet 4");
+        createSimpleBetAndGetId(token, "Bet 5");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ParameterizedTypeReference<PageResponseDTO<BetResponseDTO>> responseType = new ParameterizedTypeReference<>() {};
+
+        ResponseEntity<PageResponseDTO<BetResponseDTO>> response = testRestTemplate.exchange(
+                BETS_API_URI + "?size=2&page=1&sort=id,desc",
+                HttpMethod.GET,
+                httpEntity,
+                responseType
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().content()).hasSize(2);
+        assertThat(response.getBody().totalElements()).isEqualTo(5);
+        assertThat(response.getBody().totalPages()).isEqualTo(3);
+        assertThat(response.getBody().currentPage()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Should return an empty list when authenticated bettor has no bets")
+    void findAllWhenAuthenticatedBettorHasNoBets() {
+        String token = registerBettorAndGetToken("user.no.bets@email.com");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ParameterizedTypeReference<PageResponseDTO<BetResponseDTO>> responseType = new ParameterizedTypeReference<>() {};
+
+        ResponseEntity<PageResponseDTO<BetResponseDTO>> response = testRestTemplate.exchange(
+                BETS_API_URI,
+                HttpMethod.GET,
+                httpEntity,
+                responseType
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().content()).isEmpty();
+        assertThat(response.getBody().totalElements()).isZero();
+    }
 
     @Test
     @DisplayName("Should create a bet when authenticated and bookmaker belongs to the bettor")
@@ -107,7 +209,7 @@ public class BetControllerIT {
     @DisplayName("Should delete a bet when authenticated bettor is the owner")
     void shouldDeleteBetWhenBettorIsOwner() {
         String token = registerBettorAndGetToken("user.to.delete@email.com");
-        Long betId = createSimpleBetAndGetId(token);
+        Long betId = createSimpleBetAndGetId(token, "Simple bet");
 
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
@@ -127,7 +229,7 @@ public class BetControllerIT {
     @DisplayName("Should return 404 Not Found when trying to delete a bet from another bettor")
     void shouldReturnNotFound_whenDeletingBetFromAnotherBettor() {
         String tokenBettorA = registerBettorAndGetToken("userA.delete@email.com");
-        Long betIdBettorA = createSimpleBetAndGetId(tokenBettorA);
+        Long betIdBettorA = createSimpleBetAndGetId(tokenBettorA, "Simple bet");
 
         String tokenBettorB = registerBettorAndGetToken("userB.delete@email.com");
 
@@ -151,7 +253,7 @@ public class BetControllerIT {
     @DisplayName("Should update a bet when authenticated bettor is the owner")
     void updateBetWhenBettorIsOwner() {
         String token = registerBettorAndGetToken("bettor.to.update@email.com");
-        Long betId = createSimpleBetAndGetId(token);
+        Long betId = createSimpleBetAndGetId(token, "Simple bet");
 
         UpdateBetRequestDTO updateRequest = new UpdateBetRequestDTO(
                 null,
@@ -183,7 +285,7 @@ public class BetControllerIT {
     @DisplayName("Should return 404 Not Found when trying to update a bet from another bettor")
     void updateBetWhenBettorIsNotOwner() {
         String tokenBettorA = registerBettorAndGetToken("bettorA.update@email.com");
-        Long betIdBettorA = createSimpleBetAndGetId(tokenBettorA);
+        Long betIdBettorA = createSimpleBetAndGetId(tokenBettorA, "Simple bet");
 
         String tokenBettorB = registerBettorAndGetToken("bettorB.update@email.com");
 
@@ -270,9 +372,9 @@ public class BetControllerIT {
         return response.getBody().id();
     }
 
-    private Long createSimpleBetAndGetId(String token) {
+    private Long createSimpleBetAndGetId(String token, String selection) {
         CreateBetRequestDTO request = new CreateBetRequestDTO(
-                "Simple Bet", "Any Selection", new BigDecimal("10"), StakeType.VALUE,
+                "Simple Bet", selection, new BigDecimal("10"), StakeType.VALUE,
                 new BigDecimal("1.5"), null, null, null, null, null, null
         );
         HttpHeaders headers = new HttpHeaders();

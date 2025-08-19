@@ -3,12 +3,12 @@ package io.github.joaomnz.bettracker.service;
 import io.github.joaomnz.bettracker.dto.bet.CreateBetRequestDTO;
 import io.github.joaomnz.bettracker.dto.bet.UpdateBetRequestDTO;
 import io.github.joaomnz.bettracker.exceptions.ResourceNotFoundException;
-import io.github.joaomnz.bettracker.mappers.BetMapper;
+import io.github.joaomnz.bettracker.mapper.BetMapper;
 import io.github.joaomnz.bettracker.model.*;
 import io.github.joaomnz.bettracker.repository.BetRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-
-import java.time.LocalDateTime;
 
 @Service
 public class BetService {
@@ -19,6 +19,10 @@ public class BetService {
     public BetService(BetRepository betRepository, BetMapper betMapper) {
         this.betRepository = betRepository;
         this.betMapper = betMapper;
+    }
+
+    public Page<Bet> findAllByBettor(Bettor currentBettor, Pageable pageable){
+        return betRepository.findAllByBettor(currentBettor, pageable);
     }
 
     public Bet create(CreateBetRequestDTO request,

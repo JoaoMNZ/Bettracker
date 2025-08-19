@@ -1,4 +1,4 @@
-package io.github.joaomnz.bettracker.mappers;
+package io.github.joaomnz.bettracker.mapper;
 
 import io.github.joaomnz.bettracker.dto.bet.BetResponseDTO;
 import io.github.joaomnz.bettracker.dto.bet.CreateBetRequestDTO;
