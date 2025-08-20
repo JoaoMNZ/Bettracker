@@ -21,6 +21,11 @@ public class BetService {
         this.betMapper = betMapper;
     }
 
+    public Bet findByIdAndBettor(Long id, Bettor currentBettor){
+        return betRepository.findByIdAndBettor(id, currentBettor)
+                .orElseThrow(() -> new ResourceNotFoundException("Bet not found with id " + id + " for this bettor."));
+    }
+
     public Page<Bet> findAllByBettor(Bettor currentBettor, Pageable pageable){
         return betRepository.findAllByBettor(currentBettor, pageable);
     }
@@ -60,12 +65,8 @@ public class BetService {
     }
 
     public void delete(Long id, Bettor currentBettor){
-        Bet bet = findByIdAndBettor(id, currentBettor);
-        betRepository.delete(bet);
-    }
+        Bet betToDelete = findByIdAndBettor(id, currentBettor);
 
-    public Bet findByIdAndBettor(Long id, Bettor currentBettor){
-        return betRepository.findByIdAndBettor(id, currentBettor)
-                .orElseThrow(() -> new ResourceNotFoundException("Bet not found with id " + id + " for this bettor."));
+        betRepository.delete(betToDelete);
     }
 }

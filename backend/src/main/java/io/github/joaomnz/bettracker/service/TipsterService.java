@@ -40,4 +40,10 @@ public class TipsterService {
 
         return tipsterRepository.save(tipsterToUpdate);
     }
+
+    public void delete(Long id, Bettor currentBettor){
+        Tipster tipsterToDelete = findByIdAndBettor(id, currentBettor);
+
+        tipsterRepository.delete(tipsterToDelete);
+    }
 }

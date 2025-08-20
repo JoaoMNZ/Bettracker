@@ -207,6 +207,48 @@ public class TipsterControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("Should delete a tipster when authenticated bettor is the owner")
+    void deleteTipsterWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("bettor.to.delete@email.com");
+        Long tipsterId = createTipsterAndGetId(token, "Tipster to Delete");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                TIPSTER_API_URI + "/" + tipsterId,
+                HttpMethod.DELETE,
+                httpEntity,
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to delete a tipster from another bettor")
+    void deleteTipsterWhenBettorIsNotOwner() {
+        String tokenBettorA = registerBettorAndGetToken("bettorA.delete@email.com");
+        Long tipsterIdBettorA = createTipsterAndGetId(tokenBettorA, "Tipster of A");
+
+        String tokenBettorB = registerBettorAndGetToken("bettorB.delete@email.com");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenBettorB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                TIPSTER_API_URI + "/" + tipsterIdBettorA,
+                HttpMethod.DELETE,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private String registerBettorAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("João", email, "Password123!");
 

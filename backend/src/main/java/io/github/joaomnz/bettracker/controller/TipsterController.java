@@ -95,6 +95,15 @@ public class TipsterController {
         return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id, Authentication authentication){
+        Bettor currentBettor = getBettor(authentication);
+
+        tipsterService.delete(id, currentBettor);
+
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
     private Bettor getBettor(Authentication authentication){
         BettorDetails principal = (BettorDetails) authentication.getPrincipal();
         return principal.getBettor();
