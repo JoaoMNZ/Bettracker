@@ -2,6 +2,8 @@ package io.github.joaomnz.bettracker.integration;
 
 import io.github.joaomnz.bettracker.dto.auth.LoginResponseDTO;
 import io.github.joaomnz.bettracker.dto.auth.RegisterRequestDTO;
+import io.github.joaomnz.bettracker.dto.shared.ErrorResponseDTO;
+import io.github.joaomnz.bettracker.dto.shared.PageResponseDTO;
 import io.github.joaomnz.bettracker.dto.tipster.TipsterRequestDTO;
 import io.github.joaomnz.bettracker.dto.tipster.TipsterResponseDTO;
 import org.junit.jupiter.api.DisplayName;
@@ -9,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -24,19 +27,116 @@ public class TipsterControllerIT {
     private final String TIPSTER_API_URI = "/api/v1/tipsters";
 
     @Test
+    @DisplayName("Should return a single tipster when bettor is the owner")
+    void findByIdWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("user.get.one@email.com");
+        Long tipsterId = createTipsterAndGetId(token, "Specific Tipster");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<TipsterResponseDTO> response = testRestTemplate.exchange(
+                TIPSTER_API_URI + "/" + tipsterId,
+                HttpMethod.GET,
+                httpEntity,
+                TipsterResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().id()).isEqualTo(tipsterId);
+        assertThat(response.getBody().name()).isEqualTo("Specific Tipster");
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to get a tipster from another bettor")
+    void findByIdWhenBettorIsNotOwner() {
+        String tokenBettorA = registerBettorAndGetToken("bettorA.get@email.com");
+        Long tipsterIdBettorA = createTipsterAndGetId(tokenBettorA, "Tipster of A");
+
+        String tokenBettorB = registerBettorAndGetToken("bettorB.get@email.com");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenBettorB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                TIPSTER_API_URI + "/" + tipsterIdBettorA,
+                HttpMethod.GET,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("Should return a paginated list of tipsters for the authenticated bettor")
+    void findAllWhenAuthenticated() {
+        String token = registerBettorAndGetToken("user.get.all@email.com");
+        createTipsterAndGetId(token, "Tipster 1");
+        createTipsterAndGetId(token, "Tipster 2");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ParameterizedTypeReference<PageResponseDTO<TipsterResponseDTO>> responseType = new ParameterizedTypeReference<>() {};
+
+        ResponseEntity<PageResponseDTO<TipsterResponseDTO>> response = testRestTemplate.exchange(
+                TIPSTER_API_URI,
+                HttpMethod.GET,
+                httpEntity,
+                responseType
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().content()).hasSize(2);
+        assertThat(response.getBody().totalElements()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Should return an empty list when authenticated bettor has no tipsters")
+    void findAllWhenAuthenticatedBettorHasNoTipsters() {
+        String token = registerBettorAndGetToken("user.no.tipsters@email.com");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ParameterizedTypeReference<PageResponseDTO<TipsterResponseDTO>> responseType = new ParameterizedTypeReference<>() {};
+
+        ResponseEntity<PageResponseDTO<TipsterResponseDTO>> response = testRestTemplate.exchange(
+                TIPSTER_API_URI,
+                HttpMethod.GET,
+                httpEntity,
+                responseType
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().content()).isEmpty();
+    }
+
+    @Test
     @DisplayName("Should create a tipster when authenticated and data is valid")
     void shouldCreateTipsterWhenAuthenticated() {
-        String token = registerBettorAndGetToken();
+        String token = registerBettorAndGetToken("bettorA.create@email.com");
         TipsterRequestDTO newTipsterRequest = new TipsterRequestDTO("Pei!");
+
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
         HttpEntity<TipsterRequestDTO> requestEntity = new HttpEntity<>(newTipsterRequest, headers);
+
         ResponseEntity<TipsterResponseDTO> response = testRestTemplate.exchange(
                 TIPSTER_API_URI,
                 HttpMethod.POST,
                 requestEntity,
                 TipsterResponseDTO.class
         );
+
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().id()).isNotNull();
@@ -47,22 +147,129 @@ public class TipsterControllerIT {
     @DisplayName("Should return 403 Forbidden when trying to create a tipster without authentication")
     void shouldReturnForbiddenWhenNotAuthenticated() {
         TipsterRequestDTO newTipsterRequest = new TipsterRequestDTO("Pei!");
+
         HttpEntity<TipsterRequestDTO> requestEntity = new HttpEntity<>(newTipsterRequest);
+
         ResponseEntity<String> response = testRestTemplate.exchange(
                 TIPSTER_API_URI,
                 HttpMethod.POST,
                 requestEntity,
                 String.class
         );
+
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
-    private String registerBettorAndGetToken() {
-        RegisterRequestDTO bettor = new RegisterRequestDTO("João", "joao.menezes21@Outlook.com", "Password123!");
+    @Test
+    @DisplayName("Should update a tipster when bettor is the owner")
+    void updateWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("user.to.update@email.com");
+        Long tipsterId = createTipsterAndGetId(token, "Old Name");
+
+        TipsterRequestDTO updateRequest = new TipsterRequestDTO("New Name");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<TipsterRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<TipsterResponseDTO> response = testRestTemplate.exchange(
+                TIPSTER_API_URI + "/" + tipsterId,
+                HttpMethod.PUT,
+                httpEntity,
+                TipsterResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().id()).isEqualTo(tipsterId);
+        assertThat(response.getBody().name()).isEqualTo("New Name");
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to update a tipster from another bettor")
+    void updateWhenBettorIsNotOwner() {
+        String tokenBettorA = registerBettorAndGetToken("bettorA.update@email.com");
+        Long tipsterIdBettorA = createTipsterAndGetId(tokenBettorA, "Tipster of A");
+
+        String tokenBettorB = registerBettorAndGetToken("bettorB.update@email.com");
+
+        TipsterRequestDTO updateRequest = new TipsterRequestDTO("Attempt to change name");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenBettorB);
+        HttpEntity<TipsterRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                TIPSTER_API_URI + "/" + tipsterIdBettorA,
+                HttpMethod.PUT,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("Should delete a tipster when authenticated bettor is the owner")
+    void deleteTipsterWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("bettor.to.delete@email.com");
+        Long tipsterId = createTipsterAndGetId(token, "Tipster to Delete");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                TIPSTER_API_URI + "/" + tipsterId,
+                HttpMethod.DELETE,
+                httpEntity,
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to delete a tipster from another bettor")
+    void deleteTipsterWhenBettorIsNotOwner() {
+        String tokenBettorA = registerBettorAndGetToken("bettorA.delete@email.com");
+        Long tipsterIdBettorA = createTipsterAndGetId(tokenBettorA, "Tipster of A");
+
+        String tokenBettorB = registerBettorAndGetToken("bettorB.delete@email.com");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenBettorB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                TIPSTER_API_URI + "/" + tipsterIdBettorA,
+                HttpMethod.DELETE,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    private String registerBettorAndGetToken(String email) {
+        RegisterRequestDTO bettor = new RegisterRequestDTO("João", email, "Password123!");
+
         ResponseEntity<LoginResponseDTO> response =
                 testRestTemplate.postForEntity("/api/v1/users/register", bettor, LoginResponseDTO.class);
+
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
         return response.getBody().token();
+    }
+
+    private Long createTipsterAndGetId(String token, String name) {
+        TipsterRequestDTO request = new TipsterRequestDTO(name);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<TipsterRequestDTO> httpEntity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<TipsterResponseDTO> response =
+                testRestTemplate.exchange(TIPSTER_API_URI, HttpMethod.POST, httpEntity, TipsterResponseDTO.class);
+
+        assertThat(response.getBody()).isNotNull();
+        return response.getBody().id();
     }
 }
