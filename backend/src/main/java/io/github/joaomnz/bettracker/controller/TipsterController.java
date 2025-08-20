@@ -9,6 +9,7 @@ import io.github.joaomnz.bettracker.model.Tipster;
 import io.github.joaomnz.bettracker.security.BettorDetails;
 import io.github.joaomnz.bettracker.service.TipsterService;
 import jakarta.validation.Valid;
+import org.apache.coyote.Response;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -79,6 +80,19 @@ public class TipsterController {
         TipsterResponseDTO responseDTO = tipsterMapper.toDto(createdTipster);
 
         return ResponseEntity.created(location).body(responseDTO);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<TipsterResponseDTO> update(@PathVariable Long id,
+                                                     @Valid @RequestBody TipsterRequestDTO request,
+                                                     Authentication authentication){
+        Bettor currentBettor = getBettor(authentication);
+
+        Tipster updatedTipster = tipsterService.update(id, request, currentBettor);
+
+        TipsterResponseDTO responseDTO = tipsterMapper.toDto(updatedTipster);
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
     }
 
     private Bettor getBettor(Authentication authentication){

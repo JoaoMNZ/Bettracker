@@ -32,4 +32,12 @@ public class TipsterService {
         newTipster.setBettor(currentBettor);
         return tipsterRepository.save(newTipster);
     }
+
+    public Tipster update(Long id, TipsterRequestDTO request, Bettor currentBettor){
+        Tipster tipsterToUpdate = findByIdAndBettor(id, currentBettor);
+
+        tipsterToUpdate.setName(request.name());
+
+        return tipsterRepository.save(tipsterToUpdate);
+    }
 }
