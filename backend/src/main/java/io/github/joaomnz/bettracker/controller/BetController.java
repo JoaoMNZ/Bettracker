@@ -58,7 +58,7 @@ public class BetController {
     }
 
     @GetMapping
-    public ResponseEntity<PageResponseDTO<BetResponseDTO>> findAll(Pageable pageable, Authentication authentication){
+    public ResponseEntity<PageResponseDTO<BetResponseDTO>> findAll(Authentication authentication, Pageable pageable){
         BettorDetails principal = (BettorDetails) authentication.getPrincipal();
         Bettor currentBettor = principal.getBettor();
         Page<Bet> betsPage = betService.findAllByBettor(currentBettor, pageable);
