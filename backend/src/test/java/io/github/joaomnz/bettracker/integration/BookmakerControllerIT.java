@@ -192,6 +192,48 @@ public class BookmakerControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("Should delete a bookmaker when bettor is the owner")
+    void deleteWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("user.to.delete@email.com");
+        Long bookmakerId = createBookmakerAndGetId(token, "Bookmaker to Delete");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                BOOKMAKER_API_URI + "/" + bookmakerId,
+                HttpMethod.DELETE,
+                httpEntity,
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to delete a bookmaker from another bettor")
+    void deleteWhenBettorIsNotOwner() {
+        String tokenBettorA = registerBettorAndGetToken("bettorA.delete@email.com");
+        Long bookmakerIdBettorA = createBookmakerAndGetId(tokenBettorA, "Bookmaker of A");
+
+        String tokenBettorB = registerBettorAndGetToken("bettorB.delete@email.com");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenBettorB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                BOOKMAKER_API_URI + "/" + bookmakerIdBettorA,
+                HttpMethod.DELETE,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private String registerBettorAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("João", email, "Password123!");
 

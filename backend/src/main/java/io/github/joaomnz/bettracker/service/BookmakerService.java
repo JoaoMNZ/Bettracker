@@ -39,4 +39,8 @@ public class BookmakerService {
         return bookmakerRepository.save(bookmakerToUpdate);
     }
 
+    public void delete(Long id, Bettor currentBettor){
+        Bookmaker bookmakerToDelete = findByIdAndBettor(id, currentBettor);
+        bookmakerRepository.delete(bookmakerToDelete);
+    }
 }
