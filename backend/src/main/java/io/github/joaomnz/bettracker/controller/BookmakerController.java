@@ -78,6 +78,19 @@ public class BookmakerController {
         return ResponseEntity.created(location).body(responseDTO);
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<BookmakerResponseDTO> update(@PathVariable Long id,
+                                                       @Valid @RequestBody BookmakerRequestDTO request,
+                                                       Authentication authentication){
+        Bettor currentBettor = getBettor(authentication);
+
+        Bookmaker updatedBookmaker = bookmakerService.update(id, request, currentBettor);
+
+        BookmakerResponseDTO responseDTO = bookmakerMapper.toDto(updatedBookmaker);
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
+    }
+
     private Bettor getBettor(Authentication authentication){
         BettorDetails principal = (BettorDetails) authentication.getPrincipal();
         return principal.getBettor();

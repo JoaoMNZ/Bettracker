@@ -145,6 +145,53 @@ public class BookmakerControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
+    @Test
+    @DisplayName("Should update a bookmaker when bettor is the owner")
+    void updateWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("user.to.update@email.com");
+        Long bookmakerId = createBookmakerAndGetId(token, "Old Name");
+
+        BookmakerRequestDTO updateRequest = new BookmakerRequestDTO("New Name");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<BookmakerRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<BookmakerResponseDTO> response = testRestTemplate.exchange(
+                BOOKMAKER_API_URI + "/" + bookmakerId,
+                HttpMethod.PUT,
+                httpEntity,
+                BookmakerResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().id()).isEqualTo(bookmakerId);
+        assertThat(response.getBody().name()).isEqualTo("New Name");
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to update a bookmaker from another bettor")
+    void updateWhenBettorIsNotOwner() {
+        String tokenBettorA = registerBettorAndGetToken("bettorA.update@email.com");
+        Long bookmakerIdBettorA = createBookmakerAndGetId(tokenBettorA, "Bookmaker of A");
+
+        String tokenBettorB = registerBettorAndGetToken("bettorB.update@email.com");
+
+        BookmakerRequestDTO updateRequest = new BookmakerRequestDTO("Attempt to change name");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenBettorB);
+        HttpEntity<BookmakerRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                BOOKMAKER_API_URI + "/" + bookmakerIdBettorA,
+                HttpMethod.PUT,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private String registerBettorAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("João", email, "Password123!");
 

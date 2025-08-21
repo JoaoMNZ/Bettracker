@@ -33,5 +33,10 @@ public class BookmakerService {
         return bookmakerRepository.save(newBookmaker);
     }
 
+    public Bookmaker update(Long id, BookmakerRequestDTO request, Bettor currentBettor){
+        Bookmaker bookmakerToUpdate = findByIdAndBettor(id, currentBettor);
+        bookmakerToUpdate.setName(request.name());
+        return bookmakerRepository.save(bookmakerToUpdate);
+    }
 
 }
