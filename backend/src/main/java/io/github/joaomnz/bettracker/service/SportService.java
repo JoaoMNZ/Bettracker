@@ -40,4 +40,10 @@ public class SportService {
 
         return sportRepository.save(sportToUpdate);
     }
+
+    public void delete(Long id, Bettor currentBettor){
+        Sport sportToDelete = findByIdAndBettor(id, currentBettor);
+
+        sportRepository.delete(sportToDelete);
+    }
 }

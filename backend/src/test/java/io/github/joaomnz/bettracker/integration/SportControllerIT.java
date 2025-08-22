@@ -187,6 +187,48 @@ public class SportControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("Should delete a sport when bettor is the owner")
+    void deleteWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("user.to.delete@email.com");
+        Long sportId = createSportAndGetId(token, "Sport to Delete");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                SPORT_API_URI + "/" + sportId,
+                HttpMethod.DELETE,
+                httpEntity,
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to delete a sport from another bettor")
+    void deleteWhenBettorIsNotOwner() {
+        String tokenBettorA = registerBettorAndGetToken("bettorA.delete@email.com");
+        Long sportIdBettorA = createSportAndGetId(tokenBettorA, "Sport of A");
+
+        String tokenBettorB = registerBettorAndGetToken("bettorB.delete@email.com");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenBettorB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                SPORT_API_URI + "/" + sportIdBettorA,
+                HttpMethod.DELETE,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private String registerBettorAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("João", email, "Password123!");
 
