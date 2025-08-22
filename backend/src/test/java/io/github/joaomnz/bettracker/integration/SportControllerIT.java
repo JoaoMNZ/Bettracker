@@ -140,6 +140,53 @@ public class SportControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
+    @Test
+    @DisplayName("Should update a sport when bettor is the owner")
+    void updateWhenBettorIsOwner() {
+        String token = registerBettorAndGetToken("user.to.update@email.com");
+        Long sportId = createSportAndGetId(token, "Old Name");
+
+        SportRequestDTO updateRequest = new SportRequestDTO("New Name");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        HttpEntity<SportRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<SportResponseDTO> response = testRestTemplate.exchange(
+                SPORT_API_URI + "/" + sportId,
+                HttpMethod.PUT,
+                httpEntity,
+                SportResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().id()).isEqualTo(sportId);
+        assertThat(response.getBody().name()).isEqualTo("New Name");
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to update a sport from another bettor")
+    void updateWhenBettorIsNotOwner() {
+        String tokenBettorA = registerBettorAndGetToken("bettorA.update@email.com");
+        Long sportIdBettorA = createSportAndGetId(tokenBettorA, "Sport of A");
+
+        String tokenBettorB = registerBettorAndGetToken("bettorB.update@email.com");
+
+        SportRequestDTO updateRequest = new SportRequestDTO("Attempt to change name");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenBettorB);
+        HttpEntity<SportRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                SPORT_API_URI + "/" + sportIdBettorA,
+                HttpMethod.PUT,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private String registerBettorAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("João", email, "Password123!");
 

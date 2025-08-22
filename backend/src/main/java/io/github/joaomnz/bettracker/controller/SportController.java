@@ -80,6 +80,19 @@ public class SportController {
         return ResponseEntity.created(location).body(responseDTO);
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<SportResponseDTO> update(@PathVariable Long id,
+                                                   @Valid @RequestBody SportRequestDTO request,
+                                                   Authentication authentication){
+        Bettor currentBettor = getBettor(authentication);
+
+        Sport updatedSport = sportService.update(id, request, currentBettor);
+
+        SportResponseDTO responseDTO = sportMapper.toDto(updatedSport);
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
+    }
+
     private Bettor getBettor(Authentication authentication){
         BettorDetails principal = (BettorDetails) authentication.getPrincipal();
         return principal.getBettor();

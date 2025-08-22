@@ -32,4 +32,12 @@ public class SportService {
         newSport.setBettor(currentBettor);
         return sportRepository.save(newSport);
     }
+
+    public Sport update(Long id, SportRequestDTO request, Bettor currentBettor){
+        Sport sportToUpdate = findByIdAndBettor(id, currentBettor);
+
+        sportToUpdate.setName(request.name());
+
+        return sportRepository.save(sportToUpdate);
+    }
 }
