@@ -239,6 +239,50 @@ public class CompetitionControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("Should delete a competition when bettor is the owner of the parent sport")
+    void deleteWhenBettorIsOwner() {
+        AuthContext authContext = registerUserAndCreateSport("user.to.delete@email.com", "Football");
+        Long competitionId = createSimpleCompetition(authContext, "Competition to Delete");
+        String competitionApiUri = SPORTS_API_URI + "/" + authContext.sportId() + "/competitions/" + competitionId;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.DELETE,
+                httpEntity,
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to delete a competition from another bettor's sport")
+    void deleteWhenBettorIsNotOwner() {
+        AuthContext userA = registerUserAndCreateSport("bettorA.delete@email.com", "Football");
+        Long competitionIdUserA = createSimpleCompetition(userA, "Competition of A");
+
+        String tokenUserB = registerUserAndGetToken("bettorB.delete@email.com");
+
+        String competitionApiUri = SPORTS_API_URI + "/" + userA.sportId() + "/competitions/" + competitionIdUserA;
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenUserB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.DELETE,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private String registerUserAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("Test User", email, "Password123!");
         ResponseEntity<LoginResponseDTO> response =

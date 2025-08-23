@@ -39,4 +39,9 @@ public class CompetitionService {
         competitionToUpdate.setName(request.name());
         return competitionRepository.save(competitionToUpdate);
     }
+
+    public void delete(Long id, Sport parentSport){
+        Competition competitionToDelete = findByIdAndSport(id, parentSport);
+        competitionRepository.delete(competitionToDelete);
+    }
 }

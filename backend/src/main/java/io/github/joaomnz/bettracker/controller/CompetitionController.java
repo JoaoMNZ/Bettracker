@@ -106,6 +106,18 @@ public class CompetitionController {
         return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
     }
 
+    @DeleteMapping("/{competitionId}")
+    public ResponseEntity<Void> delete(@PathVariable Long sportId,
+                                       @PathVariable Long competitionId,
+                                       Authentication authentication){
+        Bettor currentBettor = getBettor(authentication);
+
+        Sport parentSport = sportService.findByIdAndBettor(sportId, currentBettor);
+        competitionService.delete(competitionId, parentSport);
+
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
     public Bettor getBettor(Authentication authentication){
         BettorDetails principal = (BettorDetails) authentication.getPrincipal();
         return principal.getBettor();
