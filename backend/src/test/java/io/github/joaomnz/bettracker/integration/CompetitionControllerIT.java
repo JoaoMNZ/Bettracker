@@ -190,6 +190,55 @@ public class CompetitionControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("Should update a competition when bettor is the owner of the parent sport")
+    void updateWhenBettorIsOwner() {
+        AuthContext authContext = registerUserAndCreateSport("user.to.update@email.com", "Football");
+        Long competitionId = createSimpleCompetition(authContext, "Old Name");
+        String competitionApiUri = SPORTS_API_URI + "/" + authContext.sportId() + "/competitions/" + competitionId;
+
+        CompetitionRequestDTO updateRequest = new CompetitionRequestDTO("New Name");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<CompetitionRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<CompetitionResponseDTO> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.PUT,
+                httpEntity,
+                CompetitionResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().id()).isEqualTo(competitionId);
+        assertThat(response.getBody().name()).isEqualTo("New Name");
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to update a competition from another bettor's sport")
+    void updateWhenBettorIsNotOwner() {
+        AuthContext userA = registerUserAndCreateSport("bettorA.update@email.com", "Football");
+        Long competitionIdUserA = createSimpleCompetition(userA, "Competition of A");
+
+        String tokenUserB = registerUserAndGetToken("bettorB.update@email.com");
+
+        String competitionApiUri = SPORTS_API_URI + "/" + userA.sportId() + "/competitions/" + competitionIdUserA;
+        CompetitionRequestDTO updateRequest = new CompetitionRequestDTO("Attempt to change name");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenUserB);
+        HttpEntity<CompetitionRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.PUT,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private String registerUserAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("Test User", email, "Password123!");
         ResponseEntity<LoginResponseDTO> response =

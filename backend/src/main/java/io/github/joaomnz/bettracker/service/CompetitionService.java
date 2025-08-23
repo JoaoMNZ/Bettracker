@@ -34,5 +34,9 @@ public class CompetitionService {
         return competitionRepository.save(newCompetition);
     }
 
-
+    public Competition update(Long id, CompetitionRequestDTO request, Sport parentSport){
+        Competition competitionToUpdate = findByIdAndSport(id, parentSport);
+        competitionToUpdate.setName(request.name());
+        return competitionRepository.save(competitionToUpdate);
+    }
 }

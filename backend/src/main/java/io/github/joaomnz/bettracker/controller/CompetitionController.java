@@ -91,6 +91,21 @@ public class CompetitionController {
         return ResponseEntity.created(location).body(responseDTO);
     }
 
+    @PutMapping("/{competitionId}")
+    public ResponseEntity<CompetitionResponseDTO> update(@PathVariable Long sportId,
+                                                         @PathVariable Long competitionId,
+                                                         @Valid @RequestBody CompetitionRequestDTO request,
+                                                         Authentication authentication){
+        Bettor currentBettor = getBettor(authentication);
+
+        Sport parentSport = sportService.findByIdAndBettor(sportId, currentBettor);
+        Competition updatedCompetition = competitionService.update(competitionId, request, parentSport);
+
+        CompetitionResponseDTO responseDTO = competitionMapper.toDto(updatedCompetition);
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
+    }
+
     public Bettor getBettor(Authentication authentication){
         BettorDetails principal = (BettorDetails) authentication.getPrincipal();
         return principal.getBettor();
