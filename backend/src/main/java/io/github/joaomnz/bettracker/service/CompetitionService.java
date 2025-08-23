@@ -5,6 +5,8 @@ import io.github.joaomnz.bettracker.exceptions.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.Competition;
 import io.github.joaomnz.bettracker.model.Sport;
 import io.github.joaomnz.bettracker.repository.CompetitionRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,6 +17,15 @@ public class CompetitionService {
         this.competitionRepository = competitionRepository;
     }
 
+    public Competition findByIdAndSport(Long id, Sport parentSport){
+        return competitionRepository.findByIdAndSport(id, parentSport)
+                .orElseThrow(() -> new ResourceNotFoundException("Competition not found with id " + id + " for this sport."));
+    }
+
+    public Page<Competition> findAllBySport(Sport parentSport, Pageable pageable){
+        return competitionRepository.findAllBySport(parentSport, pageable);
+    }
+
     public Competition create(CompetitionRequestDTO request, Sport parentSport){
         Competition newCompetition = new Competition();
         newCompetition.setName(request.name());
@@ -23,8 +34,5 @@ public class CompetitionService {
         return competitionRepository.save(newCompetition);
     }
 
-    public Competition findByIdAndSport(Long id, Sport parentSport){
-        return competitionRepository.findByIdAndSport(id, parentSport)
-                .orElseThrow(() -> new ResourceNotFoundException("Competition not found with id " + id + " for this sport."));
-    }
+
 }
