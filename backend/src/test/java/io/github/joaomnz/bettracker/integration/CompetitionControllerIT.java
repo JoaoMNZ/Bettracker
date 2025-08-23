@@ -4,6 +4,8 @@ import io.github.joaomnz.bettracker.dto.auth.LoginResponseDTO;
 import io.github.joaomnz.bettracker.dto.auth.RegisterRequestDTO;
 import io.github.joaomnz.bettracker.dto.competition.CompetitionRequestDTO;
 import io.github.joaomnz.bettracker.dto.competition.CompetitionResponseDTO;
+import io.github.joaomnz.bettracker.dto.shared.ErrorResponseDTO;
+import io.github.joaomnz.bettracker.dto.shared.PageResponseDTO;
 import io.github.joaomnz.bettracker.dto.sport.SportRequestDTO;
 import io.github.joaomnz.bettracker.dto.sport.SportResponseDTO;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -24,6 +27,80 @@ public class CompetitionControllerIT {
     private TestRestTemplate testRestTemplate;
 
     private final String SPORTS_API_URI = "/api/v1/sports";
+
+    @Test
+    @DisplayName("Should return a single competition when bettor is the owner")
+    void findByIdWhenBettorIsOwner() {
+        AuthContext authContext = registerUserAndCreateSport("user.get.one@email.com", "Football");
+        Long competitionId = createSimpleCompetition(authContext, "Premier League");
+        String competitionApiUri = SPORTS_API_URI + "/" + authContext.sportId() + "/competitions/" + competitionId;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<CompetitionResponseDTO> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.GET,
+                httpEntity,
+                CompetitionResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().id()).isEqualTo(competitionId);
+        assertThat(response.getBody().name()).isEqualTo("Premier League");
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to get a competition from another bettor's sport")
+    void findByIdWhenBettorIsNotOwner() {
+        AuthContext userA = registerUserAndCreateSport("userA.get@email.com", "Football");
+        Long competitionIdUserA = createSimpleCompetition(userA, "La Liga");
+
+        String tokenUserB = registerUserAndGetToken("userB.get@email.com");
+        String competitionApiUri = SPORTS_API_URI + "/" + userA.sportId() + "/competitions/" + competitionIdUserA;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenUserB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.GET,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("Should return a paginated list of competitions for a given sport")
+    void findAllWhenAuthenticated() {
+        AuthContext authContext = registerUserAndCreateSport("user.get.all@email.com", "Tennis");
+        createSimpleCompetition(authContext, "Wimbledon");
+        createSimpleCompetition(authContext, "Roland Garros");
+        String competitionApiUri = SPORTS_API_URI + "/" + authContext.sportId() + "/competitions";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ParameterizedTypeReference<PageResponseDTO<CompetitionResponseDTO>> responseType = new ParameterizedTypeReference<>() {};
+
+        ResponseEntity<PageResponseDTO<CompetitionResponseDTO>> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.GET,
+                httpEntity,
+                responseType
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().content()).hasSize(2);
+        assertThat(response.getBody().totalElements()).isEqualTo(2);
+    }
 
     @Test
     @DisplayName("Should create a competition when authenticated and sport belongs to the user")
@@ -113,6 +190,99 @@ public class CompetitionControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("Should update a competition when bettor is the owner of the parent sport")
+    void updateWhenBettorIsOwner() {
+        AuthContext authContext = registerUserAndCreateSport("user.to.update@email.com", "Football");
+        Long competitionId = createSimpleCompetition(authContext, "Old Name");
+        String competitionApiUri = SPORTS_API_URI + "/" + authContext.sportId() + "/competitions/" + competitionId;
+
+        CompetitionRequestDTO updateRequest = new CompetitionRequestDTO("New Name");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<CompetitionRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<CompetitionResponseDTO> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.PUT,
+                httpEntity,
+                CompetitionResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().id()).isEqualTo(competitionId);
+        assertThat(response.getBody().name()).isEqualTo("New Name");
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to update a competition from another bettor's sport")
+    void updateWhenBettorIsNotOwner() {
+        AuthContext userA = registerUserAndCreateSport("bettorA.update@email.com", "Football");
+        Long competitionIdUserA = createSimpleCompetition(userA, "Competition of A");
+
+        String tokenUserB = registerUserAndGetToken("bettorB.update@email.com");
+
+        String competitionApiUri = SPORTS_API_URI + "/" + userA.sportId() + "/competitions/" + competitionIdUserA;
+        CompetitionRequestDTO updateRequest = new CompetitionRequestDTO("Attempt to change name");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenUserB);
+        HttpEntity<CompetitionRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.PUT,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("Should delete a competition when bettor is the owner of the parent sport")
+    void deleteWhenBettorIsOwner() {
+        AuthContext authContext = registerUserAndCreateSport("user.to.delete@email.com", "Football");
+        Long competitionId = createSimpleCompetition(authContext, "Competition to Delete");
+        String competitionApiUri = SPORTS_API_URI + "/" + authContext.sportId() + "/competitions/" + competitionId;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.DELETE,
+                httpEntity,
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to delete a competition from another bettor's sport")
+    void deleteWhenBettorIsNotOwner() {
+        AuthContext userA = registerUserAndCreateSport("bettorA.delete@email.com", "Football");
+        Long competitionIdUserA = createSimpleCompetition(userA, "Competition of A");
+
+        String tokenUserB = registerUserAndGetToken("bettorB.delete@email.com");
+
+        String competitionApiUri = SPORTS_API_URI + "/" + userA.sportId() + "/competitions/" + competitionIdUserA;
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenUserB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                competitionApiUri,
+                HttpMethod.DELETE,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private String registerUserAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("Test User", email, "Password123!");
         ResponseEntity<LoginResponseDTO> response =
@@ -135,6 +305,19 @@ public class CompetitionControllerIT {
         assertThat(sportResponse.getBody()).isNotNull();
         Long sportId = sportResponse.getBody().id();
         return new AuthContext(token, sportId);
+    }
+
+    private Long createSimpleCompetition(AuthContext authContext, String competitionName){
+        CompetitionRequestDTO request = new CompetitionRequestDTO(competitionName);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token);
+        HttpEntity<CompetitionRequestDTO> httpEntity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<CompetitionResponseDTO> response = testRestTemplate
+                .exchange(SPORTS_API_URI + "/" + authContext.sportId + "/competitions", HttpMethod.POST, httpEntity, CompetitionResponseDTO.class);
+
+        assertThat(response.getBody()).isNotNull();
+        return response.getBody().id();
     }
 
     private record AuthContext(String token, Long sportId) {}
