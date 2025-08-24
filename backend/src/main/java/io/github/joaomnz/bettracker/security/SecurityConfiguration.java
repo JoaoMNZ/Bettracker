@@ -57,6 +57,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/sports/{sportId}/competitions/{competitionId}").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/bookmakers/{bookmakerId}/transactions/{transactionId}").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/bookmakers/{bookmakerId}/transactions").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/bookmakers/{bookmakerId}/transactions/{transactionId}").authenticated()
                         .anyRequest().denyAll()
                 )
                 .addFilterBefore(bettorAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

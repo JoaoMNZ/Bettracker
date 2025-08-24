@@ -97,6 +97,18 @@ public class TransactionController {
         return ResponseEntity.created(location).body(responseDTO);
     }
 
+    @DeleteMapping("/{transactionId}")
+    public ResponseEntity<Void> delete(@PathVariable Long bookmakerId,
+                                       @PathVariable Long transactionId,
+                                       Authentication authentication){
+        Bettor currentBettor = getBettor(authentication);
+
+        Bookmaker parentBookmaker = bookmakerService.findByIdAndBettor(bookmakerId, currentBettor);
+        transactionService.delete(transactionId, parentBookmaker);
+
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
     public Bettor getBettor(Authentication authentication){
         BettorDetails principal = (BettorDetails) authentication.getPrincipal();
         return principal.getBettor();

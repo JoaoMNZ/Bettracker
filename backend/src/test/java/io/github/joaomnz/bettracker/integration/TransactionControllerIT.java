@@ -172,6 +172,50 @@ public class TransactionControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("Should delete a transaction when bettor is the owner of the parent bookmaker")
+    void deleteWhenBettorIsOwner() {
+        AuthContext authContext = registerUserAndCreateBookmaker("user.to.delete@email.com", "Bet365");
+        Long transactionId = createSimpleTransaction(authContext, new BigDecimal("100.00"));
+        String transactionApiUri = BOOKMAKERS_API_URI + "/" + authContext.bookmakerId() + "/transactions/" + transactionId;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<Void> response = testRestTemplate.exchange(
+                transactionApiUri,
+                HttpMethod.DELETE,
+                httpEntity,
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to delete a transaction from another bettor's bookmaker")
+    void deleteWhenBettorIsNotOwner() {
+        AuthContext userA = registerUserAndCreateBookmaker("bettorA.delete@email.com", "Bookmaker A");
+        Long transactionIdUserA = createSimpleTransaction(userA, new BigDecimal("50.00"));
+
+        String tokenUserB = registerUserAndGetToken("bettorB.delete@email.com");
+
+        String transactionApiUri = BOOKMAKERS_API_URI + "/" + userA.bookmakerId() + "/transactions/" + transactionIdUserA;
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenUserB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                transactionApiUri,
+                HttpMethod.DELETE,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private String registerUserAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("Test User", email, "Password123!");
         ResponseEntity<LoginResponseDTO> response =

@@ -34,4 +34,10 @@ public class TransactionService {
         newTransaction.setBettor(parentBookmaker.getBettor());
         return  transactionRepository.save(newTransaction);
     }
+
+    public void delete(Long transactionId, Bookmaker bookmaker){
+        Transaction transactionToDelete = findByIdAndBookmaker(transactionId, bookmaker);
+
+        transactionRepository.delete(transactionToDelete);
+    }
 }
