@@ -3,6 +3,7 @@ package io.github.joaomnz.bettracker.controller;
 import io.github.joaomnz.bettracker.dto.shared.PageResponseDTO;
 import io.github.joaomnz.bettracker.dto.transaction.TransactionRequestDTO;
 import io.github.joaomnz.bettracker.dto.transaction.TransactionResponseDTO;
+import io.github.joaomnz.bettracker.dto.transaction.UpdateTransactionRequestDTO;
 import io.github.joaomnz.bettracker.mapper.TransactionMapper;
 import io.github.joaomnz.bettracker.model.Bettor;
 import io.github.joaomnz.bettracker.model.Bookmaker;
@@ -107,6 +108,21 @@ public class TransactionController {
         transactionService.delete(transactionId, parentBookmaker);
 
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
+    @PatchMapping("/{transactionId}")
+    public ResponseEntity<TransactionResponseDTO> update(@PathVariable Long bookmakerId,
+                                                         @PathVariable Long transactionId,
+                                                         @Valid @RequestBody UpdateTransactionRequestDTO request,
+                                                         Authentication authentication){
+        Bettor currentBettor = getBettor(authentication);
+
+        Bookmaker parentBookmaker = bookmakerService.findByIdAndBettor(bookmakerId, currentBettor);
+        Transaction updatedTransaction = transactionService.update(transactionId, request, parentBookmaker);
+
+        TransactionResponseDTO responseDTO = transactionMapper.toDto(updatedTransaction);
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
     }
 
     public Bettor getBettor(Authentication authentication){

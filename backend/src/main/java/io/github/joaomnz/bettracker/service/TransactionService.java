@@ -1,6 +1,7 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.transaction.TransactionRequestDTO;
+import io.github.joaomnz.bettracker.dto.transaction.UpdateTransactionRequestDTO;
 import io.github.joaomnz.bettracker.exceptions.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.Bookmaker;
 import io.github.joaomnz.bettracker.model.Transaction;
@@ -33,6 +34,19 @@ public class TransactionService {
         newTransaction.setBookmaker(parentBookmaker);
         newTransaction.setBettor(parentBookmaker.getBettor());
         return  transactionRepository.save(newTransaction);
+    }
+
+    public Transaction update(Long id, UpdateTransactionRequestDTO request, Bookmaker parentBookmaker){
+        Transaction transactionToUpdate = findByIdAndBookmaker(id, parentBookmaker);
+
+        if (request.amount() != null) {
+            transactionToUpdate.setAmount(request.amount());
+        }
+        if (request.type() != null) {
+            transactionToUpdate.setType(request.type());
+        }
+
+        return transactionRepository.save(transactionToUpdate);
     }
 
     public void delete(Long transactionId, Bookmaker bookmaker){

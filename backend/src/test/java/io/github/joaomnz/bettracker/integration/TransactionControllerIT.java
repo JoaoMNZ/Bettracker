@@ -8,6 +8,7 @@ import io.github.joaomnz.bettracker.dto.shared.ErrorResponseDTO;
 import io.github.joaomnz.bettracker.dto.shared.PageResponseDTO;
 import io.github.joaomnz.bettracker.dto.transaction.TransactionRequestDTO;
 import io.github.joaomnz.bettracker.dto.transaction.TransactionResponseDTO;
+import io.github.joaomnz.bettracker.dto.transaction.UpdateTransactionRequestDTO;
 import io.github.joaomnz.bettracker.model.enums.TransactionType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -103,6 +104,59 @@ public class TransactionControllerIT {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().content()).hasSize(2);
         assertThat(response.getBody().totalElements()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Should update a transaction when bettor is the owner of the parent bookmaker")
+    void updateWhenBettorIsOwner() {
+        AuthContext authContext = registerUserAndCreateBookmaker("user.to.update@email.com", "Bet365");
+        Long transactionId = createSimpleTransaction(authContext, new BigDecimal("100.00"));
+        String transactionApiUri = BOOKMAKERS_API_URI + "/" + authContext.bookmakerId() + "/transactions/" + transactionId;
+
+        UpdateTransactionRequestDTO updateRequest = new UpdateTransactionRequestDTO(
+                new BigDecimal("150.50"), // Novo valor
+                TransactionType.WITHDRAWAL    // Novo tipo
+        );
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<UpdateTransactionRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<TransactionResponseDTO> response = testRestTemplate.exchange(
+                transactionApiUri,
+                HttpMethod.PATCH,
+                httpEntity,
+                TransactionResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().id()).isEqualTo(transactionId);
+        assertThat(response.getBody().amount()).isEqualTo(new BigDecimal("150.50"));
+        assertThat(response.getBody().type()).isEqualTo(TransactionType.WITHDRAWAL);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to update a transaction from another bettor's bookmaker")
+    void updateWhenBettorIsNotOwner() {
+        AuthContext userA = registerUserAndCreateBookmaker("bettorA.update@email.com", "Bookmaker A");
+        Long transactionIdUserA = createSimpleTransaction(userA, new BigDecimal("200.00"));
+
+        String tokenUserB = registerUserAndGetToken("bettorB.update@email.com");
+
+        String transactionApiUri = BOOKMAKERS_API_URI + "/" + userA.bookmakerId() + "/transactions/" + transactionIdUserA;
+        UpdateTransactionRequestDTO updateRequest = new UpdateTransactionRequestDTO(new BigDecimal("999.00"), null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenUserB);
+        HttpEntity<UpdateTransactionRequestDTO> httpEntity = new HttpEntity<>(updateRequest, headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                transactionApiUri,
+                HttpMethod.PATCH,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
