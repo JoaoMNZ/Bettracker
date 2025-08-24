@@ -4,6 +4,8 @@ import io.github.joaomnz.bettracker.dto.auth.LoginResponseDTO;
 import io.github.joaomnz.bettracker.dto.auth.RegisterRequestDTO;
 import io.github.joaomnz.bettracker.dto.bookmaker.BookmakerRequestDTO;
 import io.github.joaomnz.bettracker.dto.bookmaker.BookmakerResponseDTO;
+import io.github.joaomnz.bettracker.dto.shared.ErrorResponseDTO;
+import io.github.joaomnz.bettracker.dto.shared.PageResponseDTO;
 import io.github.joaomnz.bettracker.dto.transaction.TransactionRequestDTO;
 import io.github.joaomnz.bettracker.dto.transaction.TransactionResponseDTO;
 import io.github.joaomnz.bettracker.model.enums.TransactionType;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -27,6 +30,80 @@ public class TransactionControllerIT {
     private TestRestTemplate testRestTemplate;
 
     private final String BOOKMAKERS_API_URI = "/api/v1/bookmakers";
+
+    @Test
+    @DisplayName("Should return a single transaction when bettor is the owner")
+    void findByIdWhenBettorIsOwner() {
+        AuthContext authContext = registerUserAndCreateBookmaker("user.get.one@email.com", "Bet365");
+        Long transactionId = createSimpleTransaction(authContext, new BigDecimal("100.50"));
+        String transactionApiUri = BOOKMAKERS_API_URI + "/" + authContext.bookmakerId() + "/transactions/" + transactionId;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<TransactionResponseDTO> response = testRestTemplate.exchange(
+                transactionApiUri,
+                HttpMethod.GET,
+                httpEntity,
+                TransactionResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().id()).isEqualTo(transactionId);
+        assertThat(response.getBody().amount()).isEqualTo(new BigDecimal("100.50"));
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when trying to get a transaction from another bettor's bookmaker")
+    void findByIdWhenBettorIsNotOwner() {
+        AuthContext userA = registerUserAndCreateBookmaker("userA.get@email.com", "Bookmaker A");
+        Long transactionIdUserA = createSimpleTransaction(userA, new BigDecimal("200.00"));
+
+        String tokenUserB = registerUserAndGetToken("userB.get@email.com");
+        String transactionApiUri = BOOKMAKERS_API_URI + "/" + userA.bookmakerId() + "/transactions/" + transactionIdUserA;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenUserB);
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<ErrorResponseDTO> response = testRestTemplate.exchange(
+                transactionApiUri,
+                HttpMethod.GET,
+                httpEntity,
+                ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("Should return a paginated list of transactions for a given bookmaker")
+    void findAllWhenAuthenticated() {
+        AuthContext authContext = registerUserAndCreateBookmaker("user.get.all@email.com", "Betano");
+        createSimpleTransaction(authContext, new BigDecimal("10.00"));
+        createSimpleTransaction(authContext, new BigDecimal("20.00"));
+        String transactionApiUri = BOOKMAKERS_API_URI + "/" + authContext.bookmakerId() + "/transactions";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<Void> httpEntity = new HttpEntity<>(headers);
+
+        ParameterizedTypeReference<PageResponseDTO<TransactionResponseDTO>> responseType = new ParameterizedTypeReference<>() {};
+
+        ResponseEntity<PageResponseDTO<TransactionResponseDTO>> response = testRestTemplate.exchange(
+                transactionApiUri,
+                HttpMethod.GET,
+                httpEntity,
+                responseType
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().content()).hasSize(2);
+        assertThat(response.getBody().totalElements()).isEqualTo(2);
+    }
 
     @Test
     @DisplayName("Should create a transaction when authenticated and bookmaker belongs to the user")
@@ -98,7 +175,7 @@ public class TransactionControllerIT {
     private String registerUserAndGetToken(String email) {
         RegisterRequestDTO bettor = new RegisterRequestDTO("Test User", email, "Password123!");
         ResponseEntity<LoginResponseDTO> response =
-                testRestTemplate.postForEntity("/api/v1/users/register", bettor, LoginResponseDTO.class);
+                testRestTemplate.postForEntity( "/api/v1/users/register", bettor, LoginResponseDTO.class);
         assertThat(response.getBody()).isNotNull();
         return response.getBody().token();
     }
@@ -113,9 +190,26 @@ public class TransactionControllerIT {
 
         ResponseEntity<BookmakerResponseDTO> bookmakerResponse = testRestTemplate.exchange(
                 BOOKMAKERS_API_URI, HttpMethod.POST, requestEntity, BookmakerResponseDTO.class);
+
         assertThat(bookmakerResponse.getBody()).isNotNull();
         Long bookmakerId = bookmakerResponse.getBody().id();
         return new AuthContext(token, bookmakerId);
+    }
+
+    private Long createSimpleTransaction(AuthContext authContext, BigDecimal amount) {
+        TransactionRequestDTO request = new TransactionRequestDTO(amount, TransactionType.DEPOSIT);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authContext.token());
+        HttpEntity<TransactionRequestDTO> httpEntity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<TransactionResponseDTO> response = testRestTemplate.exchange(
+                BOOKMAKERS_API_URI + "/" + authContext.bookmakerId() + "/transactions",
+                HttpMethod.POST,
+                httpEntity,
+                TransactionResponseDTO.class
+        );
+        assertThat(response.getBody()).isNotNull();
+        return response.getBody().id();
     }
 
     private record AuthContext(String token, Long bookmakerId) {}
