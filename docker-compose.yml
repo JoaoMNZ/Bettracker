@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: bettracker-db
+    restart: always
+    environment:
+      POSTGRES_DB: bettracker_db
+      POSTGRES_USER: bettracker_user
+      POSTGRES_PASSWORD: bettracker_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bettracker_user -d bettracker_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+volumes:
+  postgres_data:
