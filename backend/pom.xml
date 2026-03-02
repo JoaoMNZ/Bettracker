@@ -72,6 +72,14 @@
 			<version>42.7.10</version>
 			<scope>compile</scope>
 		</dependency>
+
+		<!-- Source: https://mvnrepository.com/artifact/com.auth0/java-jwt -->
+		<dependency>
+			<groupId>com.auth0</groupId>
+			<artifactId>java-jwt</artifactId>
+			<version>4.5.1</version>
+			<scope>compile</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
