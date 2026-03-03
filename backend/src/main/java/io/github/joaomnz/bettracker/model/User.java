@@ -53,4 +53,11 @@
         public void preUpdate(){
             updatedAt = LocalDateTime.now();
         }
+
+        public User(String name, String email, String password, BigDecimal unitValue) {
+            this.name = name;
+            this.email = email;
+            this.password = password;
+            this.unitValue = unitValue;
+        }
     }
