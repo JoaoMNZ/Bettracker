@@ -11,8 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.net.URI;
-
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -29,8 +27,6 @@ public class AuthController {
     ){
         AuthResponse response = authService.signUp(request);
 
-        URI location = uriBuilder.path("/api/v1/users/me").build().toUri();
-
-        return ResponseEntity.created(location).body(response);
+        return ResponseEntity.created(uriBuilder.path("/api/v1/users/me").build().toUri()).body(response);
     }
 }

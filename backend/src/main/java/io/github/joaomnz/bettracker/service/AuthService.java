@@ -3,6 +3,7 @@ package io.github.joaomnz.bettracker.service;
 import io.github.joaomnz.bettracker.dto.AuthResponse;
 import io.github.joaomnz.bettracker.dto.SignUpRequest;
 import io.github.joaomnz.bettracker.dto.UserResponse;
+import io.github.joaomnz.bettracker.exception.DataConflictException;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
 import io.github.joaomnz.bettracker.security.TokenService;
@@ -26,7 +27,7 @@ public class AuthService {
     @Transactional
     public AuthResponse signUp(SignUpRequest request){
         if(userRepository.existsByEmail(request.email())){
-            throw new RuntimeException("The email address is already registered");
+            throw new DataConflictException("The email address is already registered.");
         }
 
         User savedUser = userRepository.save(
