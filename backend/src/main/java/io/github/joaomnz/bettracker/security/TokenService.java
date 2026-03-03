@@ -7,6 +7,7 @@ import com.auth0.jwt.exceptions.JWTVerificationException;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -28,7 +29,7 @@ public class TokenService {
         this.algorithm = Algorithm.HMAC256(secret);
     }
 
-    public String generateToken(UserDetailsImpl userDetails){
+    public String generateToken(UserDetails userDetails){
         try{
             List<String> roles = userDetails.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
