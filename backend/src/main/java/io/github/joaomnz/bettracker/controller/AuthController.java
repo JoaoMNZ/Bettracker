@@ -1,6 +1,7 @@
 package io.github.joaomnz.bettracker.controller;
 
 import io.github.joaomnz.bettracker.dto.AuthResponse;
+import io.github.joaomnz.bettracker.dto.SignInRequest;
 import io.github.joaomnz.bettracker.dto.SignUpRequest;
 import io.github.joaomnz.bettracker.service.AuthService;
 import jakarta.validation.Valid;
@@ -28,5 +29,12 @@ public class AuthController {
         AuthResponse response = authService.signUp(request);
 
         return ResponseEntity.created(uriBuilder.path("/api/v1/users/me").build().toUri()).body(response);
+    }
+
+    @PostMapping("/signin")
+    public ResponseEntity<AuthResponse> signIn(@Valid @RequestBody SignInRequest request){
+        AuthResponse response = authService.signIn(request);
+
+        return ResponseEntity.ok(response);
     }
 }
