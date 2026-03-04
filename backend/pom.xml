@@ -30,17 +30,16 @@
 		<java.version>25</java.version>
 	</properties>
 	<dependencies>
+		<!-- Source: https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-webmvc -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
 
-		<!-- Source: https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-test -->
+		<!-- Source: https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-webmvc-test -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<version>4.0.3</version>
-			<scope>test</scope>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 		</dependency>
 
 		<!-- Source: https://mvnrepository.com/artifact/org.springframework.security/spring-security-test -->
