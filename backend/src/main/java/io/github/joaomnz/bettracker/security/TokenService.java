@@ -31,7 +31,8 @@ public class TokenService {
 
     public String generateToken(UserDetails userDetails){
         try{
-            List<String> roles = userDetails.getAuthorities().stream()
+            List<String> roles = userDetails.getAuthorities()
+                    .stream()
                     .map(GrantedAuthority::getAuthority)
                     .toList();
 
