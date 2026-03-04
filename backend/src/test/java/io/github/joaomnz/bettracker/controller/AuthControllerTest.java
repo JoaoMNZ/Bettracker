@@ -48,12 +48,7 @@ public class AuthControllerTest {
     @Test
     @DisplayName("Should sign up a new user and return 201 Created with a JWT and summary user information when provided with valid data.")
     void shouldSignUpUserSuccessfully() throws Exception {
-        SignUpRequest signUpRequest = new SignUpRequest(
-                "test",
-                "test@hotmail.com",
-                "Pass123!",
-                BigDecimal.TEN
-        );
+        SignUpRequest signUpRequest = defaultSignUpRequest();
         performJsonRequest(post(BASE_URL + "/signup"), signUpRequest)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").isNotEmpty())
@@ -86,17 +81,12 @@ public class AuthControllerTest {
     @Test
     @DisplayName("Should return 409 Conflict when attempting to sign up an existing email.")
     void shouldReturn409WhenEmailAlreadyExists() throws Exception {
-        SignUpRequest firstUser = new SignUpRequest(
-                "test",
-                "test@hotmail.com",
-                "Pass123!",
-                BigDecimal.TEN
-        );
+        SignUpRequest firstUser = defaultSignUpRequest();
         performJsonRequest(post(BASE_URL + "/signup"), firstUser);
 
         SignUpRequest secondUser = new SignUpRequest(
                 "test 2",
-                "test@hotmail.com",
+                firstUser.email(),
                 "Pass123!",
                 BigDecimal.TEN
         );
@@ -111,17 +101,12 @@ public class AuthControllerTest {
     @Test
     @DisplayName("Should return 200 OK with a JWT and summary user information when signing in with valid credentials.")
     void shouldSignInSuccessfully() throws Exception{
-        SignUpRequest signUpRequest = new SignUpRequest(
-                "test",
-                "test@hotmail.com",
-                "Pass123!",
-                BigDecimal.TEN
-        );
+        SignUpRequest signUpRequest = defaultSignUpRequest();
         performJsonRequest(post(BASE_URL + "/signup"), signUpRequest);
 
         SignInRequest signInRequest = new SignInRequest(
-                "test@hotmail.com",
-                "Pass123!"
+                signUpRequest.email(),
+                signUpRequest.password()
         );
         performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
                 .andExpect(status().isOk())
@@ -135,22 +120,26 @@ public class AuthControllerTest {
     @Test
     @DisplayName("Should return 401 Unauthorized when signing in with incorrect password")
     void shouldReturn401WhenPasswordIsIncorrect() throws Exception{
-        SignUpRequest signUpRequest = new SignUpRequest(
-                "test",
-                "test@hotmail.com",
-                "Pass123!",
-                BigDecimal.TEN
-        );
+        SignUpRequest signUpRequest = defaultSignUpRequest();
         performJsonRequest(post(BASE_URL + "/signup"), signUpRequest);
 
         SignInRequest signInRequest = new SignInRequest(
-                "test@hotmail.com",
+                signUpRequest.email(),
                 "incorrect-password"
         );
         performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Unauthorized"))
                 .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    private SignUpRequest defaultSignUpRequest() {
+        return new SignUpRequest(
+                "test",
+                "test@hotmail.com",
+                "Pass123!",
+                BigDecimal.TEN
+        );
     }
 
     private ResultActions performJsonRequest(MockHttpServletRequestBuilder builder, Object body) throws Exception {
