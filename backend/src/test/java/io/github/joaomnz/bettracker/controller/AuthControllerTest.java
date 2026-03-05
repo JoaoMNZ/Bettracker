@@ -1,5 +1,6 @@
 package io.github.joaomnz.bettracker.controller;
 
+import io.github.joaomnz.bettracker.dto.SignInRequest;
 import io.github.joaomnz.bettracker.dto.SignUpRequest;
 import io.github.joaomnz.bettracker.enums.UserType;
 import io.github.joaomnz.bettracker.repository.UserRepository;
@@ -47,35 +48,29 @@ public class AuthControllerTest {
     @Test
     @DisplayName("Should sign up a new user and return 201 Created with a JWT and summary user information when provided with valid data.")
     void shouldSignUpUserSuccessfully() throws Exception {
-        SignUpRequest request = new SignUpRequest(
-                "test",
-                "test@hotmail.com",
-                "Pass123!",
-                BigDecimal.TEN
-        );
-
-        performJsonRequest(post(BASE_URL + "/signup"), request)
+        SignUpRequest signUpRequest = defaultSignUpRequest();
+        performJsonRequest(post(BASE_URL + "/signup"), signUpRequest)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").isNotEmpty())
-                .andExpect(jsonPath("$.user.name").value(request.name()))
-                .andExpect(jsonPath("$.user.email").value(request.email()))
-                .andExpect(jsonPath("$.user.unitValue").value(request.unitValue()))
-                .andExpect(jsonPath("$.user.userType").value(UserType.FREE.name()));
+                .andExpect(jsonPath("$.user.name").value(signUpRequest.name()))
+                .andExpect(jsonPath("$.user.email").value(signUpRequest.email()))
+                .andExpect(jsonPath("$.user.unitValue").value(signUpRequest.unitValue().doubleValue()))
+                .andExpect(jsonPath("$.user.userType").value(UserType.FREE.name()))
+                .andExpect(jsonPath("$.user.verified").value(Boolean.FALSE));
 
         assertThat(userRepository.count()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("Should return 400 Bad Request and validation errors when data is invalid")
+    @DisplayName("Should return 400 Bad Request and validation errors when data is invalid.")
     void shouldReturn400WhenValidationFails() throws Exception {
-        SignUpRequest request = new SignUpRequest(
+        SignUpRequest signUpRequest = new SignUpRequest(
                 "",
                 "invalid-email",
                 "Pass123!",
                 BigDecimal.TEN
         );
-
-        performJsonRequest(post(BASE_URL + "/signup"), request)
+        performJsonRequest(post(BASE_URL + "/signup"), signUpRequest)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Bad Request"))
                 .andExpect(jsonPath("$.validationErrors.name").exists())
@@ -85,28 +80,68 @@ public class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("Should return 409 Conflict when attempting to sign up an existing email")
+    @DisplayName("Should return 409 Conflict when attempting to sign up an existing email.")
     void shouldReturn409WhenEmailAlreadyExists() throws Exception {
-        SignUpRequest firstUser = new SignUpRequest(
+        SignUpRequest firstUser = defaultSignUpRequest();
+        performJsonRequest(post(BASE_URL + "/signup"), firstUser);
+
+        SignUpRequest secondUser = new SignUpRequest(
+                "test 2",
+                firstUser.email(),
+                "Pass123!",
+                BigDecimal.TEN
+        );
+        performJsonRequest(post(BASE_URL + "/signup"), secondUser)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        assertThat(userRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Should return 200 OK with a JWT and summary user information when signing in with valid credentials.")
+    void shouldSignInSuccessfully() throws Exception{
+        SignUpRequest signUpRequest = defaultSignUpRequest();
+        performJsonRequest(post(BASE_URL + "/signup"), signUpRequest);
+
+        SignInRequest signInRequest = new SignInRequest(
+                signUpRequest.email(),
+                signUpRequest.password()
+        );
+        performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(jsonPath("$.user.name").value(signUpRequest.name()))
+                .andExpect(jsonPath("$.user.email").value(signUpRequest.email()))
+                .andExpect(jsonPath("$.user.unitValue").value(signUpRequest.unitValue().doubleValue()))
+                .andExpect(jsonPath("$.user.userType").value(UserType.FREE.name()))
+                .andExpect(jsonPath("$.user.verified").value(Boolean.FALSE));
+    }
+
+    @Test
+    @DisplayName("Should return 401 Unauthorized when signing in with incorrect password")
+    void shouldReturn401WhenPasswordIsIncorrect() throws Exception{
+        SignUpRequest signUpRequest = defaultSignUpRequest();
+        performJsonRequest(post(BASE_URL + "/signup"), signUpRequest);
+
+        SignInRequest signInRequest = new SignInRequest(
+                signUpRequest.email(),
+                "incorrect-password"
+        );
+        performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Unauthorized"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    private SignUpRequest defaultSignUpRequest() {
+        return new SignUpRequest(
                 "test",
                 "test@hotmail.com",
                 "Pass123!",
                 BigDecimal.TEN
         );
-        performJsonRequest(post(BASE_URL + "/signup"), firstUser);
-
-        SignUpRequest secondUser = new SignUpRequest(
-                "test 2",
-                "test@hotmail.com",
-                "Pass123!",
-                BigDecimal.TEN
-        );
-
-        performJsonRequest(post(BASE_URL + "/signup"), secondUser)
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").isNotEmpty());
-
-        assertThat(userRepository.count()).isEqualTo(1);
     }
 
     private ResultActions performJsonRequest(MockHttpServletRequestBuilder builder, Object body) throws Exception {

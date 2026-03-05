@@ -10,7 +10,8 @@ public record UserResponse(
         String name,
         String email,
         BigDecimal unitValue,
-        UserType userType
+        UserType userType,
+        boolean verified
 ) {
     public static UserResponse fromEntity(User user){
         return new UserResponse(
@@ -18,7 +19,8 @@ public record UserResponse(
                 user.getName(),
                 user.getEmail(),
                 user.getUnitValue(),
-                user.getUserType()
+                user.getUserType(),
+                user.isVerified()
         );
     }
 }
