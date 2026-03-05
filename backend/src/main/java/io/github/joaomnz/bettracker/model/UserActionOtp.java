@@ -10,17 +10,21 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "user_action_tokens")
+@Table(name = "user_action_otps")
 @NoArgsConstructor
 @Getter @Setter
 @EqualsAndHashCode(of = "id")
-public class UserActionToken {
+public class UserActionOtp {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
     @Column(nullable = false)
-    private String token;
+    private String otp;
 
     @Column(nullable = false, name = "action_type")
     @Enumerated(EnumType.STRING)
@@ -35,12 +39,15 @@ public class UserActionToken {
     @Column(name = "used_at")
     private LocalDateTime usedAt;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
-
     @PrePersist
     void prePersist(){
         createdAt = LocalDateTime.now();
+    }
+
+    public UserActionOtp(User user, String otp, ActionType actionType, LocalDateTime expiresAt) {
+        this.user = user;
+        this.otp = otp;
+        this.actionType = actionType;
+        this.expiresAt = expiresAt;
     }
 }
