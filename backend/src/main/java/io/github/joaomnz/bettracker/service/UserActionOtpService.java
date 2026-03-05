@@ -1,6 +1,8 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.enums.ActionType;
+import io.github.joaomnz.bettracker.exception.BusinessRuleException;
+import io.github.joaomnz.bettracker.exception.ResourceNotFound;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.model.UserActionOtp;
 import io.github.joaomnz.bettracker.repository.UserActionOtpRepository;
@@ -33,6 +35,22 @@ public class UserActionOtpService {
         );
 
         return otp;
+    }
+
+    public void validateAndBurnOtp(User user, String otp, ActionType actionType){
+        UserActionOtp storedOtp = userActionOtpRepository.findTopByUserAndActionTypeOrderByCreatedAtDesc(user, actionType)
+                .orElseThrow(() -> new ResourceNotFound("No OTP found."));
+
+        if(storedOtp.getUsedAt() != null || storedOtp.getExpiresAt().isBefore(LocalDateTime.now())){
+            throw new BusinessRuleException("This code has expired or was already used.");
+        }
+
+        if (!passwordEncoder.matches(otp, storedOtp.getOtp())) {
+            throw new BusinessRuleException("Invalid code.");
+        }
+
+        storedOtp.setUsedAt(LocalDateTime.now());
+        userActionOtpRepository.save(storedOtp);
     }
 
     private String generateSixDigitCode(){

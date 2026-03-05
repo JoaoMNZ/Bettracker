@@ -3,9 +3,12 @@ package io.github.joaomnz.bettracker.controller;
 import io.github.joaomnz.bettracker.dto.AuthResponse;
 import io.github.joaomnz.bettracker.dto.SignInRequest;
 import io.github.joaomnz.bettracker.dto.SignUpRequest;
+import io.github.joaomnz.bettracker.dto.VerifyEmailRequest;
+import io.github.joaomnz.bettracker.security.UserDetailsImpl;
 import io.github.joaomnz.bettracker.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,5 +39,15 @@ public class AuthController {
         AuthResponse response = authService.signIn(request);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<Void> verifyEmail(
+            @Valid @RequestBody VerifyEmailRequest request,
+            @AuthenticationPrincipal UserDetailsImpl userDetails
+    ){
+        authService.verifyEmail(userDetails.getUser(), request);
+
+        return ResponseEntity.noContent().build();
     }
 }
