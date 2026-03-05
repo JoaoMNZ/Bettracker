@@ -55,7 +55,8 @@ public class AuthControllerTest {
                 .andExpect(jsonPath("$.user.name").value(signUpRequest.name()))
                 .andExpect(jsonPath("$.user.email").value(signUpRequest.email()))
                 .andExpect(jsonPath("$.user.unitValue").value(signUpRequest.unitValue().doubleValue()))
-                .andExpect(jsonPath("$.user.userType").value(UserType.FREE.name()));
+                .andExpect(jsonPath("$.user.userType").value(UserType.FREE.name()))
+                .andExpect(jsonPath("$.user.verified").value(Boolean.FALSE));
 
         assertThat(userRepository.count()).isEqualTo(1);
     }
@@ -114,7 +115,8 @@ public class AuthControllerTest {
                 .andExpect(jsonPath("$.user.name").value(signUpRequest.name()))
                 .andExpect(jsonPath("$.user.email").value(signUpRequest.email()))
                 .andExpect(jsonPath("$.user.unitValue").value(signUpRequest.unitValue().doubleValue()))
-                .andExpect(jsonPath("$.user.userType").value(UserType.FREE.name()));
+                .andExpect(jsonPath("$.user.userType").value(UserType.FREE.name()))
+                .andExpect(jsonPath("$.user.verified").value(Boolean.FALSE));
     }
 
     @Test
