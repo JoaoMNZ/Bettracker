@@ -9,3 +9,15 @@ CREATE TABLE users (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP
 );
+
+CREATE TABLE user_action_tokens(
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    token VARCHAR(255) NOT NULL,
+    action_type VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL ,
+    used_at TIMESTAMP,
+
+    CONSTRAINT fk_users_user_action_tokens FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+)
