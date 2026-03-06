@@ -4,6 +4,7 @@ import io.github.joaomnz.bettracker.dto.SignInRequest;
 import io.github.joaomnz.bettracker.dto.SignUpRequest;
 import io.github.joaomnz.bettracker.enums.UserType;
 import io.github.joaomnz.bettracker.repository.UserRepository;
+import io.github.joaomnz.bettracker.service.EmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -37,6 +39,10 @@ public class AuthControllerTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    // Prevents real SMTP network calls and avoids spamming Mailtrap during test execution.
+    @MockitoBean
+    private EmailService emailService;
 
     private static final String BASE_URL = "/api/v1/auth";
 
