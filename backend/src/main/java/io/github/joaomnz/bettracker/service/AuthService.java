@@ -1,8 +1,7 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.*;
-import io.github.joaomnz.bettracker.enums.ActionType;
-import io.github.joaomnz.bettracker.exception.BusinessRuleException;
+import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
@@ -23,14 +22,14 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final TokenService tokenService;
-    private final UserActionOtpService userActionOtpService;
+    private final OtpTokenService otpTokenService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, TokenService tokenService, UserActionOtpService userActionOtpService) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, TokenService tokenService, OtpTokenService otpTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.tokenService = tokenService;
-        this.userActionOtpService = userActionOtpService;
+        this.otpTokenService = otpTokenService;
     }
 
     @Transactional
@@ -48,9 +47,9 @@ public class AuthService {
                 )
         );
 
-        String otp = userActionOtpService.generateOtp(
+        String otp = otpTokenService.createOtp(
                 savedUser,
-                ActionType.EMAIL_VERIFICATION,
+                OtpPurpose.EMAIL_VERIFICATION,
                 LocalDateTime.now().plusHours(24)
         );
 
@@ -63,8 +62,9 @@ public class AuthService {
     }
 
     public AuthResponse signIn(SignInRequest request){
-        UsernamePasswordAuthenticationToken authToken  = new UsernamePasswordAuthenticationToken(request.email(), request.password());
-        Authentication authentication = authenticationManager.authenticate(authToken);
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.email(), request.password())
+        );
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
 
         return new AuthResponse(
@@ -74,14 +74,29 @@ public class AuthService {
     }
 
     @Transactional
-    public void verifyEmail(User user, VerifyEmailRequest request){
+    public void verifyEmail(User user, EmailVerificationRequest request){
         if(user.isVerified()){
             throw new DataConflictException("User is already verified.");
         }
 
-        userActionOtpService.validateAndBurnOtp(user, request.otp(), ActionType.EMAIL_VERIFICATION);
+        otpTokenService.verifyOtp(user, request.otp(), OtpPurpose.EMAIL_VERIFICATION);
 
         user.setVerified(true);
         userRepository.save(user);
+    }
+
+    @Transactional
+    public void resendEmailVerification(User user){
+        if(user.isVerified()){
+            throw new DataConflictException("User is already verified.");
+        }
+
+        String otp = otpTokenService.createOtp(
+                user,
+                OtpPurpose.EMAIL_VERIFICATION,
+                LocalDateTime.now().plusHours(24)
+        );
+
+        // SMTP
     }
 }
