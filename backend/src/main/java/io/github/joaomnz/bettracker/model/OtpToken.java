@@ -1,6 +1,6 @@
 package io.github.joaomnz.bettracker.model;
 
-import io.github.joaomnz.bettracker.enums.ActionType;
+import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import jakarta.persistence.*;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -10,11 +10,11 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "user_action_otps")
+@Table(name = "otp_tokens")
 @NoArgsConstructor
 @Getter @Setter
 @EqualsAndHashCode(of = "id")
-public class UserActionOtp {
+public class OtpToken {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -24,11 +24,11 @@ public class UserActionOtp {
     private User user;
 
     @Column(nullable = false)
-    private String otp;
+    private String code;
 
-    @Column(nullable = false, name = "action_type")
+    @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    private ActionType actionType;
+    private OtpPurpose purpose;
 
     @Column(nullable = false, name = "created_at")
     private LocalDateTime createdAt;
@@ -44,10 +44,10 @@ public class UserActionOtp {
         createdAt = LocalDateTime.now();
     }
 
-    public UserActionOtp(User user, String otp, ActionType actionType, LocalDateTime expiresAt) {
+    public OtpToken(User user, String code, OtpPurpose purpose, LocalDateTime expiresAt) {
         this.user = user;
-        this.otp = otp;
-        this.actionType = actionType;
+        this.code = code;
+        this.purpose = purpose;
         this.expiresAt = expiresAt;
     }
 }

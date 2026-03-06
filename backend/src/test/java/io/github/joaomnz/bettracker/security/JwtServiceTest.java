@@ -13,16 +13,16 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class TokenServiceTest {
-    private TokenService tokenService;
+public class JwtServiceTest {
+    private JwtService jwtService;
     private UserDetails testUser;
 
     @BeforeEach
     public void setUp() {
-        tokenService = new TokenService();
-        ReflectionTestUtils.setField(tokenService, "secret", "test-secret-key");
-        ReflectionTestUtils.setField(tokenService, "issuer", "test-issuer");
-        tokenService.init();
+        jwtService = new JwtService();
+        ReflectionTestUtils.setField(jwtService, "secret", "test-secret-key");
+        ReflectionTestUtils.setField(jwtService, "issuer", "test-issuer");
+        jwtService.init();
 
         List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_FREE"));
         testUser = new User("test@hotmail.com", "Pass123!", authorities);
@@ -31,7 +31,7 @@ public class TokenServiceTest {
     @Test
     @DisplayName("Should generate a valid JWT.")
     void shouldGenerateSuccessfully(){
-        String token = tokenService.generateToken(testUser);
+        String token = jwtService.generateToken(testUser);
         assertThat(token).isNotNull();
         assertThat(token).isNotBlank();
         assertThat(token.split("\\.")).hasSize(3);
@@ -40,8 +40,8 @@ public class TokenServiceTest {
     @Test
     @DisplayName("Should extract the subject (email) from a valid JWT.")
     void shouldExtractSubjectFromValidToken(){
-        String token = tokenService.generateToken(testUser);
-        String subject = tokenService.getSubjectFromToken(token);
+        String token = jwtService.generateToken(testUser);
+        String subject = jwtService.extractSubject(token);
 
         assertThat(subject).isNotNull();
         assertThat(subject).isEqualTo(testUser.getUsername());
@@ -51,7 +51,7 @@ public class TokenServiceTest {
     @DisplayName("Should return null when JWT is invalid.")
     void shouldReturnNullWhenTokenIsInvalid(){
         String token = "eyJhbGciOiJIUzI1NiIsInR5cCI.invalidpayload.invalidsignature";
-        String subject = tokenService.getSubjectFromToken(token);
+        String subject = jwtService.extractSubject(token);
 
         assertThat(subject).isNull();
     }

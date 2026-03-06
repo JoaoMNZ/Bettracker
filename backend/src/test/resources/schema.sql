@@ -11,14 +11,14 @@ CREATE TABLE users (
     updated_at TIMESTAMP
 );
 
-CREATE TABLE user_action_otps(
+CREATE TABLE otp_tokens(
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
-    otp VARCHAR(255) NOT NULL,
-    action_type VARCHAR(50) NOT NULL,
+    code VARCHAR(255) NOT NULL,
+    purpose VARCHAR(50) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP NOT NULL ,
     used_at TIMESTAMP,
 
-    CONSTRAINT fk_users_user_action_otps FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_users_otp_tokens FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 )

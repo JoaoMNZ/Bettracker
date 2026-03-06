@@ -15,22 +15,21 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 @Component
-public class SecurityFilter extends OncePerRequestFilter {
-    private final TokenService tokenService;
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
 
-    public SecurityFilter(TokenService tokenService, UserDetailsServiceImpl userDetailsService) {
-        this.tokenService = tokenService;
+    public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
+        this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
     }
 
-
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        String token = recoverToken(request);
+        String token = extractToken(request);
 
         if(token != null){
-            String subject = tokenService.getSubjectFromToken(token);
+            String subject = jwtService.extractSubject(token);
             if(subject != null){
                 UserDetails userDetails = userDetailsService.loadUserByUsername(subject);
                 Authentication authentication = new UsernamePasswordAuthenticationToken(
@@ -45,7 +44,7 @@ public class SecurityFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String recoverToken(HttpServletRequest request){
+    private String extractToken(HttpServletRequest request){
         String authorizationHeader = request.getHeader("Authorization");
         if(authorizationHeader != null && authorizationHeader.startsWith("Bearer ")){
             return authorizationHeader.substring(7);
