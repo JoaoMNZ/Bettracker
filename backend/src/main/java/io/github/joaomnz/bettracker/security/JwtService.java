@@ -15,7 +15,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Service
-public class TokenService {
+public class JwtService {
     @Value("${api.security.token.secret}")
     private String secret;
 
@@ -40,15 +40,15 @@ public class TokenService {
                     .withIssuer(issuer)
                     .withSubject(userDetails.getUsername())
                     .withClaim("roles", roles)
-                    .withIssuedAt(creationDate())
-                    .withExpiresAt(expirationDate())
+                    .withIssuedAt(issuedAt())
+                    .withExpiresAt(expiration())
                     .sign(algorithm);
         }catch(JWTCreationException exception){
             throw new RuntimeException("Error generating JWT.", exception);
         }
     }
 
-    public String getSubjectFromToken(String token){
+    public String extractSubject(String token){
         try{
             return JWT.require(algorithm)
                     .withIssuer(issuer)
@@ -61,11 +61,11 @@ public class TokenService {
         }
     }
 
-    private Instant creationDate(){
+    private Instant issuedAt(){
         return Instant.now();
     }
 
-    private Instant expirationDate(){
+    private Instant expiration(){
         return Instant.now().plus(4, ChronoUnit.HOURS);
     }
 }

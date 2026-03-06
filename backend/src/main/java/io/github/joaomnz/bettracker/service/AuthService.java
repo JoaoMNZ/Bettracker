@@ -5,7 +5,7 @@ import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
-import io.github.joaomnz.bettracker.security.TokenService;
+import io.github.joaomnz.bettracker.security.JwtService;
 import io.github.joaomnz.bettracker.security.UserDetailsImpl;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -21,14 +21,14 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
-    private final TokenService tokenService;
+    private final JwtService jwtService;
     private final OtpTokenService otpTokenService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, TokenService tokenService, OtpTokenService otpTokenService) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtService jwtService, OtpTokenService otpTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
-        this.tokenService = tokenService;
+        this.jwtService = jwtService;
         this.otpTokenService = otpTokenService;
     }
 
@@ -56,7 +56,7 @@ public class AuthService {
         // We need to implement an SMTP to actually send the token to the user's email.
 
         return new AuthResponse(
-                tokenService.generateToken(new UserDetailsImpl(savedUser)),
+                jwtService.generateToken(new UserDetailsImpl(savedUser)),
                 UserResponse.fromEntity(savedUser)
         );
     }
@@ -68,7 +68,7 @@ public class AuthService {
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
 
         return new AuthResponse(
-                tokenService.generateToken(userDetails),
+                jwtService.generateToken(userDetails),
                 UserResponse.fromEntity(userDetails.getUser())
         );
     }
