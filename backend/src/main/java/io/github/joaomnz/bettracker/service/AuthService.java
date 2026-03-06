@@ -23,13 +23,15 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final OtpTokenService otpTokenService;
+    private final EmailService emailService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtService jwtService, OtpTokenService otpTokenService) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtService jwtService, OtpTokenService otpTokenService, EmailService emailService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.otpTokenService = otpTokenService;
+        this.emailService = emailService;
     }
 
     @Transactional
@@ -53,7 +55,7 @@ public class AuthService {
                 LocalDateTime.now().plusHours(24)
         );
 
-        // We need to implement an SMTP to actually send the token to the user's email.
+        emailService.sendVerificationEmail(savedUser.getEmail(), otp);
 
         return new AuthResponse(
                 jwtService.generateToken(new UserDetailsImpl(savedUser)),
@@ -97,6 +99,6 @@ public class AuthService {
                 LocalDateTime.now().plusHours(24)
         );
 
-        // SMTP
+        emailService.sendVerificationEmail(user.getEmail(), otp);
     }
 }
