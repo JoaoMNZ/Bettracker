@@ -26,6 +26,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -65,6 +69,7 @@ public class AuthControllerTest {
                 .andExpect(jsonPath("$.user.verified").value(Boolean.FALSE));
 
         assertThat(userRepository.count()).isEqualTo(1);
+        verify(emailService, times(1)).sendVerificationEmail(eq(signUpRequest.email()), anyString());
     }
 
     @Test
