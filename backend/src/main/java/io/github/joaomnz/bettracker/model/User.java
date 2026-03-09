@@ -1,5 +1,6 @@
 package io.github.joaomnz.bettracker.model;
 
+import io.github.joaomnz.bettracker.dto.SignUpRequest;
 import io.github.joaomnz.bettracker.enums.UserType;
 import jakarta.persistence.*;
 import lombok.*;
