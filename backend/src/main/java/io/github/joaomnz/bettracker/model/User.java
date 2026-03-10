@@ -1,6 +1,5 @@
 package io.github.joaomnz.bettracker.model;
 
-import io.github.joaomnz.bettracker.dto.SignUpRequest;
 import io.github.joaomnz.bettracker.enums.UserType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -32,13 +31,13 @@ public class User {
 
     @Column(nullable = false, name = "user_type")
     @Enumerated(EnumType.STRING)
-    private UserType userType;
+    private UserType userType = UserType.FREE;
 
     @Column(nullable = false)
-    private boolean active;
+    private boolean active = true;
 
     @Column(nullable = false)
-    private boolean verified;
+    private boolean verified = false;
 
     @Column(nullable = false, updatable = false, name = "created_at")
     private LocalDateTime createdAt;
@@ -49,9 +48,6 @@ public class User {
     @PrePersist
     public void prePersist(){
         createdAt = LocalDateTime.now();
-        userType = UserType.FREE;
-        active = true;
-        verified = false;
     }
 
     @PreUpdate

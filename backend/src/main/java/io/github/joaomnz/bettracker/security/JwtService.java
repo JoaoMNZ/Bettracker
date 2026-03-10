@@ -5,7 +5,6 @@ import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTCreationException;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import io.github.joaomnz.bettracker.exception.JwtGenerationException;
-import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -17,16 +16,11 @@ import java.util.List;
 
 @Service
 public class JwtService {
-    @Value("${api.security.token.secret}")
-    private String secret;
+    private final String issuer;
+    private final Algorithm algorithm;
 
-    @Value("${api.security.token.issuer}")
-    private String issuer;
-
-    private Algorithm algorithm;
-
-    @PostConstruct
-    public void init() {
+    public JwtService(@Value("${api.security.token.secret}") String secret, @Value("${api.security.token.issuer}") String issuer) {
+        this.issuer = issuer;
         this.algorithm = Algorithm.HMAC256(secret);
     }
 
