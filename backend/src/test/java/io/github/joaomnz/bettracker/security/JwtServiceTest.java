@@ -7,7 +7,6 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
@@ -19,11 +18,7 @@ public class JwtServiceTest {
 
     @BeforeEach
     public void setUp() {
-        jwtService = new JwtService();
-        ReflectionTestUtils.setField(jwtService, "secret", "test-secret-key");
-        ReflectionTestUtils.setField(jwtService, "issuer", "test-issuer");
-        jwtService.init();
-
+        jwtService = new JwtService("test-secret-key", "test-issuer");
         List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_FREE"));
         testUser = new User("test@hotmail.com", "Pass123!", authorities);
     }
