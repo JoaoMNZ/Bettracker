@@ -17,7 +17,7 @@ public final class OtpTokenFactory {
     public static OtpToken createEmailVerification(User user){
         return new OtpToken(
                 user,
-                DEFAULT_CODE,
+                PASSWORD_ENCODER.encode(DEFAULT_CODE),
                 OtpPurpose.EMAIL_VERIFICATION,
                 LocalDateTime.now().plusHours(24)
         );
@@ -26,7 +26,7 @@ public final class OtpTokenFactory {
     public static OtpToken createEmailVerification(User user, LocalDateTime expiresAt) {
         return new OtpToken(
                 user,
-                DEFAULT_CODE,
+                PASSWORD_ENCODER.encode(DEFAULT_CODE),
                 OtpPurpose.EMAIL_VERIFICATION,
                 expiresAt
         );

@@ -1,6 +1,8 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
+import io.github.joaomnz.bettracker.exception.BusinessRuleException;
+import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.exception.TooManyRequestsException;
 import io.github.joaomnz.bettracker.factory.OtpTokenFactory;
 import io.github.joaomnz.bettracker.factory.UserFactory;
@@ -82,6 +84,83 @@ public class OtpTokenServiceTest {
 
         assertThatThrownBy(() -> otpTokenService.createOtp(testUser, OtpPurpose.EMAIL_VERIFICATION, LocalDateTime.now().plusHours(24)))
                 .isInstanceOf(TooManyRequestsException.class);
+
+        verify(otpTokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should successfully verify and update the OTP token.")
+    void shouldVerifyOtpSuccessfully() {
+        OtpToken validOtp = OtpTokenFactory.createEmailVerification(testUser);
+
+        when(otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(testUser, OtpPurpose.EMAIL_VERIFICATION))
+                .thenReturn(Optional.of(validOtp));
+
+        when(passwordEncoder.matches(OtpTokenFactory.DEFAULT_CODE, validOtp.getCode()))
+                .thenReturn(true);
+
+        otpTokenService.verifyOtp(testUser, OtpTokenFactory.DEFAULT_CODE, OtpPurpose.EMAIL_VERIFICATION);
+
+        assertThat(validOtp.getUsedAt()).isNotNull();
+        verify(otpTokenRepository, times(1)).save(validOtp);
+    }
+
+    @Test
+    @DisplayName("Should throw ResourceNotFoundException when no token exists for the user.")
+    void shouldThrowExceptionWhenNoTokenExists() {
+        when(otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(testUser, OtpPurpose.EMAIL_VERIFICATION))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> otpTokenService.verifyOtp(testUser, OtpTokenFactory.DEFAULT_CODE, OtpPurpose.EMAIL_VERIFICATION))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(otpTokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should throw BusinessRuleException when the token has already been used.")
+    void shouldThrowExceptionWhenTokenAlreadyUsed() {
+        OtpToken usedOtp = OtpTokenFactory.createEmailVerification(testUser);
+        usedOtp.setUsedAt(LocalDateTime.now().minusMinutes(5));
+
+        when(otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(testUser, OtpPurpose.EMAIL_VERIFICATION))
+                .thenReturn(Optional.of(usedOtp));
+
+        assertThatThrownBy(() -> otpTokenService.verifyOtp(testUser, OtpTokenFactory.DEFAULT_CODE, OtpPurpose.EMAIL_VERIFICATION))
+                .isInstanceOf(BusinessRuleException.class);
+
+        verify(otpTokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should throw BusinessRuleException when the token is expired.")
+    void shouldThrowExceptionWhenTokenIsExpired() {
+        OtpToken expiredOtp = OtpTokenFactory.createEmailVerification(testUser);
+        expiredOtp.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+
+        when(otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(testUser, OtpPurpose.EMAIL_VERIFICATION))
+                .thenReturn(Optional.of(expiredOtp));
+
+        assertThatThrownBy(() -> otpTokenService.verifyOtp(testUser, OtpTokenFactory.DEFAULT_CODE, OtpPurpose.EMAIL_VERIFICATION))
+                .isInstanceOf(BusinessRuleException.class);
+
+        verify(otpTokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should throw BusinessRuleException when the provided code is invalid.")
+    void shouldThrowExceptionWhenCodeIsInvalid() {
+        OtpToken validOtp = OtpTokenFactory.createEmailVerification(testUser);
+
+        when(otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(testUser, OtpPurpose.EMAIL_VERIFICATION))
+                .thenReturn(Optional.of(validOtp));
+
+        String wrongCode = "111111";
+        when(passwordEncoder.matches(wrongCode, validOtp.getCode()))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> otpTokenService.verifyOtp(testUser, wrongCode, OtpPurpose.EMAIL_VERIFICATION))
+                .isInstanceOf(BusinessRuleException.class);
 
         verify(otpTokenRepository, never()).save(any());
     }
