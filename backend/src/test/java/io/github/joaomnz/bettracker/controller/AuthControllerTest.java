@@ -146,4 +146,47 @@ public class AuthControllerTest extends IntegrationTest {
         User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
         assertThat(updatedUser.isVerified()).isTrue();
     }
+
+    @Test
+    @DisplayName("Should fail verification and return 400 Bad Request when OTP is invalid.")
+    void shouldFailVerificationWithInvalidOtp() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+        otpTokenRepository.save(new OtpToken(savedUser, passwordEncoder.encode(RAW_OTP), OtpPurpose.EMAIL_VERIFICATION, LocalDateTime.now().plusHours(24)));
+
+        EmailVerificationRequest emailVerificationRequest = new EmailVerificationRequest("111111");
+
+        performAuthenticatedJsonRequest(post(BASE_URL + "/email-verification"), savedUser, emailVerificationRequest)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+        assertThat(updatedUser.isVerified()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should resend email verification and return 204 No Content for an unverified user.")
+    void shouldResendEmailVerificationSuccessfully() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+
+        performAuthenticatedJsonRequest(post(BASE_URL + "/email-verification/resend"), savedUser, null)
+                .andExpect(status().isNoContent());
+
+        verify(emailService, times(1)).sendVerificationEmail(eq(savedUser.getEmail()), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 409 Conflict when attempting to resend verification to an already verified user.")
+    void shouldReturn409WhenResendingToVerifiedUser() throws Exception {
+        User user = UserFactory.createUser();
+        user.setVerified(true);
+        User savedUser = userRepository.save(user);
+
+        performAuthenticatedJsonRequest(post(BASE_URL + "/email-verification/resend"), savedUser, null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        verify(emailService, times(0)).sendVerificationEmail(eq(savedUser.getEmail()), anyString());
+    }
 }
