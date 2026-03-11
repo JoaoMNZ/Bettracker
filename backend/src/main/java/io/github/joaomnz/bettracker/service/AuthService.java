@@ -68,7 +68,7 @@ public class AuthService {
         );
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = {BadCredentialsException.class, LockedException.class})
     public AuthResponse signIn(SignInRequest request){
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new BusinessRuleException("Invalid credentials."));

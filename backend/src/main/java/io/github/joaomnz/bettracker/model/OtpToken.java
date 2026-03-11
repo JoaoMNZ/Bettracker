@@ -39,6 +39,9 @@ public class OtpToken {
     @Column(name = "used_at")
     private LocalDateTime usedAt;
 
+    @Column(nullable = false, name = "failed_attempts")
+    private int failedAttempts = 0;
+
     @PrePersist
     void prePersist(){
         createdAt = LocalDateTime.now();

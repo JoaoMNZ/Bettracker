@@ -49,7 +49,7 @@ public class OtpTokenService {
         return code;
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = BusinessRuleException.class)
     public void verifyOtp(User user, String code, OtpPurpose purpose){
         OtpToken latest = otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(user, purpose)
                 .orElseThrow(() -> new ResourceNotFoundException("No verification code was requested."));
@@ -65,7 +65,17 @@ public class OtpTokenService {
         }
 
         if (!passwordEncoder.matches(code, latest.getCode())) {
-            throw new BusinessRuleException("Invalid verification code.");
+            int attempts = latest.getFailedAttempts() + 1;
+            latest.setFailedAttempts(attempts);
+
+            if(attempts >= 3){
+                latest.setExpiresAt(now);
+                otpTokenRepository.save(latest);
+                throw new BusinessRuleException("Too many failed attempts. This code has been invalidated. Please request a new one.");
+            }
+
+            otpTokenRepository.save(latest);
+            throw new BusinessRuleException("Invalid verification code. You have " + (3 - attempts) + " attempt(s) left.");
         }
 
         latest.setUsedAt(now);

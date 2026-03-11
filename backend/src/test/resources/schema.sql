@@ -21,6 +21,7 @@ CREATE TABLE otp_tokens(
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP NOT NULL ,
     used_at TIMESTAMP,
+    failed_attempts INT NOT NULL DEFAULT 0,
 
     CONSTRAINT fk_users_otp_tokens FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 )
