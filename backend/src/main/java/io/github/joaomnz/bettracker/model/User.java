@@ -45,6 +45,12 @@ public class User {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(nullable = false, name = "failed_login_attempts")
+    private int failedLoginAttempts = 0;
+
+    @Column(name = "lockout_end")
+    private LocalDateTime lockoutEnd;
+
     @PrePersist
     public void prePersist(){
         createdAt = LocalDateTime.now();

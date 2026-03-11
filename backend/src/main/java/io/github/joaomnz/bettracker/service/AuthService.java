@@ -2,12 +2,16 @@ package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.*;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
+import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
+import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
 import io.github.joaomnz.bettracker.security.JwtService;
 import io.github.joaomnz.bettracker.security.UserDetailsImpl;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class AuthService {
@@ -63,16 +68,48 @@ public class AuthService {
         );
     }
 
+    @Transactional
     public AuthResponse signIn(SignInRequest request){
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.email(), request.password())
-        );
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        User user = userRepository.findByEmail(request.email())
+                .orElseThrow(() -> new BusinessRuleException("Invalid credentials."));
 
-        return new AuthResponse(
-                jwtService.generateToken(userDetails),
-                UserResponse.fromEntity(userDetails.getUser())
-        );
+        LocalDateTime now = LocalDateTime.now();
+
+        if(user.getLockoutEnd() != null && user.getLockoutEnd().isAfter(now)){
+            long minutesLeft = ChronoUnit.MINUTES.between(now, user.getLockoutEnd());
+            throw new LockedException("Account is locked due to too many failed attempts. Please try again in " + Math.max(1, minutesLeft) + " minute(s).");
+        }
+
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.email(), request.password())
+            );
+
+            user.setFailedLoginAttempts(0);
+            user.setLockoutEnd(null);
+
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+
+            return new AuthResponse(
+                    jwtService.generateToken(userDetails),
+                    UserResponse.fromEntity(userDetails.getUser())
+            );
+
+        } catch(BadCredentialsException exception) {
+            int attempts = user.getFailedLoginAttempts() + 1;
+            user.setFailedLoginAttempts(attempts);
+
+            if(attempts >= 5){
+                user.setLockoutEnd(now.plusMinutes(15));
+                user.setFailedLoginAttempts(0);
+                throw new LockedException("Account locked due to too many failed attempts. Please try again in 15 minutes.");
+            }
+
+            throw exception;
+
+        } finally {
+            userRepository.save(user);
+        }
     }
 
     @Transactional

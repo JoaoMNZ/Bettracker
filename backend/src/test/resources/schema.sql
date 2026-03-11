@@ -8,7 +8,9 @@ CREATE TABLE users (
     active BOOLEAN NOT NULL DEFAULT TRUE,
     verified BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP
+    updated_at TIMESTAMP,
+    failed_login_attempts INT NOT NULL DEFAULT 0,
+    lockout_end TIMESTAMP
 );
 
 CREATE TABLE otp_tokens(
