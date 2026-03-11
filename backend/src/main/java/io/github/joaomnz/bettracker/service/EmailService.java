@@ -11,12 +11,11 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class EmailService {
     private final JavaMailSender javaMailSender;
+    private final String senderEmail;
 
-    @Value("${app.email.sender}")
-    private String senderEmail;
-
-    public EmailService(JavaMailSender javaMailSender) {
+    public EmailService(JavaMailSender javaMailSender, @Value("${app.email.sender}") String senderEmail) {
         this.javaMailSender = javaMailSender;
+        this.senderEmail = senderEmail;
     }
 
     @Async
