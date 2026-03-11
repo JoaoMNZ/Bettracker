@@ -120,16 +120,56 @@ public class AuthControllerTest extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("Should return 401 Unauthorized when signing in with incorrect password")
-    void shouldReturn401WhenPasswordIsIncorrect() throws Exception{
-        SignUpRequest signUpRequest = UserFactory.createSignUpRequest();
-        performJsonRequest(post(BASE_URL + "/signup"), signUpRequest);
+    @DisplayName("Should return 401 Unauthorized and increment failed attempts when password is incorrect.")
+    void shouldReturn401AndIncrementAttemptsOnBadPassword() throws Exception {
+        User user = UserFactory.createUser();
+        userRepository.save(user);
 
-        SignInRequest signInRequest = UserFactory.createSignInRequest(signUpRequest.email(), "incorrect-password");
+        SignInRequest signInRequest = new SignInRequest(user.getEmail(), "invalid-password");
+
         performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Unauthorized"))
                 .andExpect(jsonPath("$.message").isNotEmpty());
+
+        User updatedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertThat(updatedUser.getFailedLoginAttempts()).isEqualTo(1);
+        assertThat(updatedUser.getLockoutEnd()).isNull();
+    }
+
+    @Test
+    @DisplayName("Should lock account and return 401 when reaching 5 failed attempts.")
+    void shouldLockAccountOnFifthFailedAttempt() throws Exception {
+        User user = UserFactory.createUser();
+        user.setFailedLoginAttempts(4);
+        userRepository.save(user);
+
+        SignInRequest signInRequest = new SignInRequest(user.getEmail(), "invalid-password");
+
+        performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Account locked due to too many failed attempts. Please try again in 15 minutes."));
+
+        User updatedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertThat(updatedUser.getFailedLoginAttempts()).isEqualTo(0);
+        assertThat(updatedUser.getLockoutEnd()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Should block login completely if account is currently locked, even with correct credentials.")
+    void shouldBlockLoginWhenAccountIsLocked() throws Exception {
+        User user = UserFactory.createUser();
+        user.setLockoutEnd(LocalDateTime.now().plusMinutes(15));
+        userRepository.save(user);
+
+        SignInRequest signInRequest = UserFactory.createSignInRequest(user.getEmail(), UserFactory.DEFAULT_PASSWORD);
+
+        performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Account is locked due to too many failed attempts.")));
+
+        User updatedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertThat(updatedUser.getLockoutEnd()).isNotNull();
     }
 
     @Test

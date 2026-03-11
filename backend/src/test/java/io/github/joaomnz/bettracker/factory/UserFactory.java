@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 public final class UserFactory {
     private static final String DEFAULT_NAME = "Test User";
     private static final String DEFAULT_EMAIL = "test@example.com";
-    private static final String DEFAULT_PASSWORD = "Pass123!";
+    public static final String DEFAULT_PASSWORD = "Pass123!";
     private static final BigDecimal DEFAULT_UNIT_VALUE = BigDecimal.TEN;
     private static final PasswordEncoder PASSWORD_ENCODER  = new BCryptPasswordEncoder(12);
 
