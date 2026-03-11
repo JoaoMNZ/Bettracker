@@ -4,10 +4,9 @@ import io.github.joaomnz.bettracker.IntegrationTest;
 import io.github.joaomnz.bettracker.dto.EmailVerificationRequest;
 import io.github.joaomnz.bettracker.dto.SignInRequest;
 import io.github.joaomnz.bettracker.dto.SignUpRequest;
-import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.enums.UserType;
+import io.github.joaomnz.bettracker.factory.OtpTokenFactory;
 import io.github.joaomnz.bettracker.factory.UserFactory;
-import io.github.joaomnz.bettracker.model.OtpToken;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.OtpTokenRepository;
 import io.github.joaomnz.bettracker.repository.UserRepository;
@@ -17,7 +16,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.math.BigDecimal;
@@ -43,11 +41,7 @@ public class AuthControllerTest extends IntegrationTest {
     @MockitoBean
     private EmailService emailService;
 
-    @Autowired
-    PasswordEncoder passwordEncoder;
-
     private static final String BASE_URL = "/api/v1/auth";
-    private static final String RAW_OTP = "123456";
 
     @BeforeEach
     void setUp() {
@@ -90,14 +84,14 @@ public class AuthControllerTest extends IntegrationTest {
     @Test
     @DisplayName("Should return 409 Conflict when attempting to sign up an existing email.")
     void shouldReturn409WhenEmailAlreadyExists() throws Exception {
-        SignUpRequest firstUser = UserFactory.createSignUpRequest();
-        performJsonRequest(post(BASE_URL + "/signup"), firstUser);
+        User existingUser = UserFactory.createUser();
+        userRepository.save(existingUser);
 
-        SignUpRequest secondUser = UserFactory.createSignUpRequest(firstUser.email());
+        SignUpRequest secondUser = UserFactory.createSignUpRequest(existingUser.getEmail());
         performJsonRequest(post(BASE_URL + "/signup"), secondUser)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("Conflict"))
-                .andExpect(jsonPath("$.message").isNotEmpty());
+                .andExpect(jsonPath("$.message").value("The email address is already registered."));
 
         assertThat(userRepository.count()).isEqualTo(1);
     }
@@ -105,40 +99,81 @@ public class AuthControllerTest extends IntegrationTest {
     @Test
     @DisplayName("Should return 200 OK with a JWT and summary user information when signing in with valid credentials.")
     void shouldSignInSuccessfully() throws Exception{
-        SignUpRequest signUpRequest = UserFactory.createSignUpRequest();
-        performJsonRequest(post(BASE_URL + "/signup"), signUpRequest);
+        User user = UserFactory.createUser();
+        userRepository.save(user);
 
-        SignInRequest signInRequest = UserFactory.createSignInRequest(signUpRequest.email(), signUpRequest.password());
+        SignInRequest signInRequest = UserFactory.createSignInRequest(user.getEmail(), UserFactory.DEFAULT_PASSWORD);
+
         performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isNotEmpty())
-                .andExpect(jsonPath("$.user.name").value(signUpRequest.name()))
-                .andExpect(jsonPath("$.user.email").value(signUpRequest.email()))
-                .andExpect(jsonPath("$.user.unitValue").value(signUpRequest.unitValue().doubleValue()))
+                .andExpect(jsonPath("$.user.name").value(user.getName()))
+                .andExpect(jsonPath("$.user.email").value(user.getEmail()))
+                .andExpect(jsonPath("$.user.unitValue").value(user.getUnitValue().doubleValue()))
                 .andExpect(jsonPath("$.user.userType").value(UserType.FREE.name()))
                 .andExpect(jsonPath("$.user.verified").value(Boolean.FALSE));
     }
 
     @Test
-    @DisplayName("Should return 401 Unauthorized when signing in with incorrect password")
-    void shouldReturn401WhenPasswordIsIncorrect() throws Exception{
-        SignUpRequest signUpRequest = UserFactory.createSignUpRequest();
-        performJsonRequest(post(BASE_URL + "/signup"), signUpRequest);
+    @DisplayName("Should return 401 Unauthorized and increment failed attempts when password is incorrect.")
+    void shouldReturn401AndIncrementAttemptsOnBadPassword() throws Exception {
+        User user = UserFactory.createUser();
+        userRepository.save(user);
 
-        SignInRequest signInRequest = UserFactory.createSignInRequest(signUpRequest.email(), "incorrect-password");
+        SignInRequest signInRequest = new SignInRequest(user.getEmail(), "invalid-password");
+
         performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Unauthorized"))
                 .andExpect(jsonPath("$.message").isNotEmpty());
+
+        User updatedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertThat(updatedUser.getFailedLoginAttempts()).isEqualTo(1);
+        assertThat(updatedUser.getLockoutEnd()).isNull();
+    }
+
+    @Test
+    @DisplayName("Should lock account and return 401 when reaching 5 failed attempts.")
+    void shouldLockAccountOnFifthFailedAttempt() throws Exception {
+        User user = UserFactory.createUser();
+        user.setFailedLoginAttempts(4);
+        userRepository.save(user);
+
+        SignInRequest signInRequest = new SignInRequest(user.getEmail(), "invalid-password");
+
+        performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Account locked due to too many failed attempts. Please try again in 15 minutes."));
+
+        User updatedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertThat(updatedUser.getFailedLoginAttempts()).isEqualTo(0);
+        assertThat(updatedUser.getLockoutEnd()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Should block login completely if account is currently locked, even with correct credentials.")
+    void shouldBlockLoginWhenAccountIsLocked() throws Exception {
+        User user = UserFactory.createUser();
+        user.setLockoutEnd(LocalDateTime.now().plusMinutes(15));
+        userRepository.save(user);
+
+        SignInRequest signInRequest = UserFactory.createSignInRequest(user.getEmail(), UserFactory.DEFAULT_PASSWORD);
+
+        performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Account is locked due to too many failed attempts.")));
+
+        User updatedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertThat(updatedUser.getLockoutEnd()).isNotNull();
     }
 
     @Test
     @DisplayName("Should verify email successfully and return 204 No Content when provided with a valid OTP.")
     void shouldVerifyEmailSuccessfully() throws Exception{
         User savedUser = userRepository.save(UserFactory.createUser());
-        otpTokenRepository.save(new OtpToken(savedUser, passwordEncoder.encode(RAW_OTP), OtpPurpose.EMAIL_VERIFICATION, LocalDateTime.now().plusHours(24)));
+        otpTokenRepository.save(OtpTokenFactory.createEmailVerification(savedUser));
 
-        EmailVerificationRequest emailVerificationRequest = new EmailVerificationRequest(RAW_OTP);
+        EmailVerificationRequest emailVerificationRequest = new EmailVerificationRequest(OtpTokenFactory.DEFAULT_CODE);
 
         performAuthenticatedJsonRequest(post(BASE_URL + "/email-verification"), savedUser, emailVerificationRequest)
                 .andExpect(status().isNoContent());
@@ -151,14 +186,14 @@ public class AuthControllerTest extends IntegrationTest {
     @DisplayName("Should fail verification and return 400 Bad Request when OTP is invalid.")
     void shouldFailVerificationWithInvalidOtp() throws Exception {
         User savedUser = userRepository.save(UserFactory.createUser());
-        otpTokenRepository.save(new OtpToken(savedUser, passwordEncoder.encode(RAW_OTP), OtpPurpose.EMAIL_VERIFICATION, LocalDateTime.now().plusHours(24)));
+        otpTokenRepository.save(OtpTokenFactory.createEmailVerification(savedUser));
 
         EmailVerificationRequest emailVerificationRequest = new EmailVerificationRequest("111111");
 
         performAuthenticatedJsonRequest(post(BASE_URL + "/email-verification"), savedUser, emailVerificationRequest)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Bad Request"))
-                .andExpect(jsonPath("$.message").isNotEmpty());
+                .andExpect(jsonPath("$.message").value("Invalid verification code. You have 2 attempt(s) left."));
 
         User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
         assertThat(updatedUser.isVerified()).isFalse();
@@ -185,7 +220,7 @@ public class AuthControllerTest extends IntegrationTest {
         performAuthenticatedJsonRequest(post(BASE_URL + "/email-verification/resend"), savedUser, null)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("Conflict"))
-                .andExpect(jsonPath("$.message").isNotEmpty());
+                .andExpect(jsonPath("$.message").value("User is already verified."));
 
         verify(emailService, times(0)).sendVerificationEmail(eq(savedUser.getEmail()), anyString());
     }

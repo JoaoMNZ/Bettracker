@@ -12,7 +12,7 @@ public final class OtpTokenFactory {
     private OtpTokenFactory(){}
 
     public static final String DEFAULT_CODE = "123456";
-    public static final PasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder(12);
+    private static final PasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder(12);
 
     public static OtpToken createEmailVerification(User user){
         return new OtpToken(
