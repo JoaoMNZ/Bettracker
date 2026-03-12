@@ -23,6 +23,7 @@ public class EmailServiceTest {
 
     private static final String SENDER_EMAIL = "noreply@bettracker.com";
     private static final String TARGET_EMAIL = "user@example.com";
+    private static final String TARGET_NAME = "Test User";
     private static final String OTP = "123456";
 
     @BeforeEach
@@ -33,7 +34,7 @@ public class EmailServiceTest {
     @Test
     @DisplayName("Should construct and send a formatted verification email.")
     void shouldSendVerificationEmailSuccessfully() {
-        emailService.sendVerificationEmail(TARGET_EMAIL, OTP);
+        emailService.sendVerificationEmail(TARGET_EMAIL, TARGET_NAME, OTP, true);
 
         ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(javaMailSender, times(1)).send(messageCaptor.capture());
@@ -52,7 +53,7 @@ public class EmailServiceTest {
         doThrow(new RuntimeException("Mail server is down!"))
                 .when(javaMailSender).send(any(SimpleMailMessage.class));
 
-        assertThatCode(() -> emailService.sendVerificationEmail(TARGET_EMAIL, OTP))
+        assertThatCode(() -> emailService.sendVerificationEmail(TARGET_EMAIL, TARGET_NAME, OTP, false))
                 .doesNotThrowAnyException();
     }
 }

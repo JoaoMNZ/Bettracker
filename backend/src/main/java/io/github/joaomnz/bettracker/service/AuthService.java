@@ -4,7 +4,6 @@ import io.github.joaomnz.bettracker.dto.*;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
-import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
 import io.github.joaomnz.bettracker.security.JwtService;
@@ -60,7 +59,7 @@ public class AuthService {
                 LocalDateTime.now().plusHours(24)
         );
 
-        emailService.sendVerificationEmail(savedUser.getEmail(), otp);
+        emailService.sendVerificationEmail(savedUser.getEmail(), savedUser.getName(), otp, true);
 
         return new AuthResponse(
                 jwtService.generateToken(new UserDetailsImpl(savedUser)),
@@ -112,7 +111,7 @@ public class AuthService {
         }
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = BusinessRuleException.class)
     public void verifyEmail(User user, EmailVerificationRequest request){
         if(user.isVerified()){
             throw new DataConflictException("User is already verified.");
@@ -136,6 +135,6 @@ public class AuthService {
                 LocalDateTime.now().plusHours(24)
         );
 
-        emailService.sendVerificationEmail(user.getEmail(), otp);
+        emailService.sendVerificationEmail(user.getEmail(), user.getName(), otp, false);
     }
 }

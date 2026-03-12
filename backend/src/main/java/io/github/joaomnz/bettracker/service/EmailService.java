@@ -19,13 +19,47 @@ public class EmailService {
     }
 
     @Async
-    public void sendVerificationEmail(String to, String otp) {
-        String subject = "BetTracker - Verify your email";
+    public void sendVerificationEmail(String to, String name, String otp, boolean isNewUser) {
+        String subject = "BetTracker - Email Verification";
+
+        String greetingLine = isNewUser
+                ? "Welcome to BetTracker! Your email verification code is:"
+                : "Your email verification code is:";
+
         String text = String.format(
-                "Welcome to BetTracker!\n\n" +
-                        "Your verification code is: %s\n\n" +
-                        "This code will expire in 24 hours. If you did not request this, please ignore this email.",
-                otp
+                """
+                Hi %s,
+                
+                %s
+                
+                %s
+                
+                This code will expire in 24 hours. If you did not request this, please ignore this email.
+                
+                Best regards,
+                The BetTracker Team
+                """,
+                name, greetingLine, otp
+        );
+
+        sendEmail(to, subject, text);
+    }
+
+    @Async
+    public void sendDeactivationEmail(String to, String name){
+        String subject = "BetTracker - Account Deactivated";
+        String text = String.format(
+                """
+                Hi %s,
+                
+                This email is to confirm that your BetTracker account has been successfully deactivated.
+                
+                If you did not authorize this action, please contact our support team immediately so we can secure your account.
+                
+                Best regards,
+                The BetTracker Team
+                """,
+                name
         );
 
         sendEmail(to, subject, text);
