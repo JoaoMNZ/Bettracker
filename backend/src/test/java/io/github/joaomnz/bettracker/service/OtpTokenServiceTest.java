@@ -106,6 +106,48 @@ public class OtpTokenServiceTest {
     }
 
     @Test
+    @DisplayName("Should throw BusinessRuleException and increment failed attempts when the provided code is invalid.")
+    void shouldThrowExceptionWhenCodeIsInvalid() {
+        OtpToken validOtp = OtpTokenFactory.createEmailVerification(testUser);
+
+        when(otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(testUser, OtpPurpose.EMAIL_VERIFICATION))
+                .thenReturn(Optional.of(validOtp));
+
+        String wrongCode = "111111";
+        when(passwordEncoder.matches(wrongCode, validOtp.getCode()))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> otpTokenService.verifyOtp(testUser, wrongCode, OtpPurpose.EMAIL_VERIFICATION))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("Invalid verification code. You have 2 attempt(s) left.");
+
+        assertThat(validOtp.getFailedAttempts()).isEqualTo(1);
+        verify(otpTokenRepository, times(1)).save(validOtp);
+    }
+
+    @Test
+    @DisplayName("Should burn the token and throw BusinessRuleException when reaching 3 failed attempts.")
+    void shouldBurnTokenOnThirdFailedAttempt() throws Exception {
+        OtpToken otp = OtpTokenFactory.createEmailVerification(testUser);
+        otp.setFailedAttempts(2);
+
+        when(otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(testUser, OtpPurpose.EMAIL_VERIFICATION))
+                .thenReturn(Optional.of(otp));
+
+        String wrongCode = "111111";
+        when(passwordEncoder.matches(wrongCode, otp.getCode()))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> otpTokenService.verifyOtp(testUser, wrongCode, OtpPurpose.EMAIL_VERIFICATION))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("Too many failed attempts. This code has been invalidated. Please request a new one.");
+
+        assertThat(otp.getFailedAttempts()).isEqualTo(3);
+        assertThat(otp.getExpiresAt()).isBeforeOrEqualTo(LocalDateTime.now());
+        verify(otpTokenRepository, times(1)).save(otp);
+    }
+
+    @Test
     @DisplayName("Should throw ResourceNotFoundException when no token exists for the user.")
     void shouldThrowExceptionWhenNoTokenExists() {
         when(otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(testUser, OtpPurpose.EMAIL_VERIFICATION))
@@ -142,24 +184,6 @@ public class OtpTokenServiceTest {
                 .thenReturn(Optional.of(expiredOtp));
 
         assertThatThrownBy(() -> otpTokenService.verifyOtp(testUser, OtpTokenFactory.DEFAULT_CODE, OtpPurpose.EMAIL_VERIFICATION))
-                .isInstanceOf(BusinessRuleException.class);
-
-        verify(otpTokenRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("Should throw BusinessRuleException when the provided code is invalid.")
-    void shouldThrowExceptionWhenCodeIsInvalid() {
-        OtpToken validOtp = OtpTokenFactory.createEmailVerification(testUser);
-
-        when(otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(testUser, OtpPurpose.EMAIL_VERIFICATION))
-                .thenReturn(Optional.of(validOtp));
-
-        String wrongCode = "111111";
-        when(passwordEncoder.matches(wrongCode, validOtp.getCode()))
-                .thenReturn(false);
-
-        assertThatThrownBy(() -> otpTokenService.verifyOtp(testUser, wrongCode, OtpPurpose.EMAIL_VERIFICATION))
                 .isInstanceOf(BusinessRuleException.class);
 
         verify(otpTokenRepository, never()).save(any());
