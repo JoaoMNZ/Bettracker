@@ -1,12 +1,14 @@
-package io.github.joaomnz.bettracker.exception;
+package io.github.joaomnz.bettracker.exception.handler;
 
-import io.github.joaomnz.bettracker.dto.ErrorResponse;
+import io.github.joaomnz.bettracker.dto.common.ErrorResponse;
+import io.github.joaomnz.bettracker.exception.*;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -112,6 +114,22 @@ public class GlobalExceptionHandler {
         );
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ErrorResponse> handleDisabled(DisabledException exception, HttpServletRequest request){
+        log.warn("Login attempt on deactivated account for URI: {}", request.getRequestURI());
+
+        ErrorResponse response = new ErrorResponse(
+                Instant.now(),
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                "Your account has been deactivated. Please contact support to reactivate it.",
+                null,
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
 

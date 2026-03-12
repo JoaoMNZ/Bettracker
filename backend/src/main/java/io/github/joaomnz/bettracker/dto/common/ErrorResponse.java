@@ -1,4 +1,4 @@
-package io.github.joaomnz.bettracker.dto;
+package io.github.joaomnz.bettracker.dto.common;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 

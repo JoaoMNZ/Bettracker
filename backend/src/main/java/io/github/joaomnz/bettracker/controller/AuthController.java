@@ -1,9 +1,9 @@
 package io.github.joaomnz.bettracker.controller;
 
-import io.github.joaomnz.bettracker.dto.AuthResponse;
-import io.github.joaomnz.bettracker.dto.SignInRequest;
-import io.github.joaomnz.bettracker.dto.SignUpRequest;
-import io.github.joaomnz.bettracker.dto.EmailVerificationRequest;
+import io.github.joaomnz.bettracker.dto.auth.AuthResponse;
+import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
+import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
+import io.github.joaomnz.bettracker.dto.auth.EmailVerificationRequest;
 import io.github.joaomnz.bettracker.security.UserDetailsImpl;
 import io.github.joaomnz.bettracker.service.AuthService;
 import jakarta.validation.Valid;
@@ -46,14 +46,14 @@ public class AuthController {
             @Valid @RequestBody EmailVerificationRequest request,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ){
-        authService.verifyEmail(userDetails.getUser(), request);
+        authService.verifyEmail(userDetails.getUser().getId(), request);
 
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/email-verification/resend")
     public ResponseEntity<Void> resendEmailVerification(@AuthenticationPrincipal UserDetailsImpl userDetails){
-        authService.resendEmailVerification(userDetails.getUser());
+        authService.resendEmailVerification(userDetails.getUser().getId());
 
         return ResponseEntity.noContent().build();
     }
