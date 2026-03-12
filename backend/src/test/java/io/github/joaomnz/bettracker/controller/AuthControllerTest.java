@@ -125,7 +125,7 @@ public class AuthControllerTest extends IntegrationTest {
         User user = UserFactory.createUser();
         userRepository.save(user);
 
-        SignInRequest signInRequest = new SignInRequest(user.getEmail(), "invalid-password");
+        SignInRequest signInRequest = new SignInRequest(user.getEmail(), "incorrect-password");
 
         performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
                 .andExpect(status().isUnauthorized())
@@ -144,7 +144,7 @@ public class AuthControllerTest extends IntegrationTest {
         user.setFailedLoginAttempts(4);
         userRepository.save(user);
 
-        SignInRequest signInRequest = new SignInRequest(user.getEmail(), "invalid-password");
+        SignInRequest signInRequest = new SignInRequest(user.getEmail(), "incorrect-password");
 
         performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
                 .andExpect(status().isUnauthorized())
