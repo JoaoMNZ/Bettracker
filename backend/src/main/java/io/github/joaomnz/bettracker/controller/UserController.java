@@ -1,6 +1,7 @@
 package io.github.joaomnz.bettracker.controller;
 
 import io.github.joaomnz.bettracker.dto.DeactivateAccountRequest;
+import io.github.joaomnz.bettracker.dto.UpdateProfileRequest;
 import io.github.joaomnz.bettracker.dto.UserProfileResponse;
 import io.github.joaomnz.bettracker.security.UserDetailsImpl;
 import io.github.joaomnz.bettracker.service.UserService;
@@ -21,6 +22,16 @@ public class UserController {
     @GetMapping("/me")
     public ResponseEntity<UserProfileResponse> getProfile(@AuthenticationPrincipal UserDetailsImpl userDetails){
         UserProfileResponse response = userService.getProfile(userDetails.getUser().getId());
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/me")
+    public ResponseEntity<UserProfileResponse> updateProfile(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @Valid @RequestBody UpdateProfileRequest request
+    ){
+        UserProfileResponse response = userService.updateProfile(userDetails.getUser().getId(), request);
 
         return ResponseEntity.ok(response);
     }

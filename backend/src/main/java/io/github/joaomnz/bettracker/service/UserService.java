@@ -1,6 +1,7 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.DeactivateAccountRequest;
+import io.github.joaomnz.bettracker.dto.UpdateProfileRequest;
 import io.github.joaomnz.bettracker.dto.UserProfileResponse;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
@@ -26,6 +27,24 @@ public class UserService {
     public UserProfileResponse getProfile(Long userId){
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
+        return UserProfileResponse.fromEntity(user);
+    }
+
+    @Transactional
+    public UserProfileResponse updateProfile(Long userId, UpdateProfileRequest request){
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
+        if(request.name() != null){
+            user.setName(request.name());
+        }
+
+        if(request.unitValue() != null){
+            user.setUnitValue(request.unitValue());
+        }
+
+        userRepository.saveAndFlush(user);
 
         return UserProfileResponse.fromEntity(user);
     }
