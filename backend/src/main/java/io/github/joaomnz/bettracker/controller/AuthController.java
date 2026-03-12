@@ -46,14 +46,14 @@ public class AuthController {
             @Valid @RequestBody EmailVerificationRequest request,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ){
-        authService.verifyEmail(userDetails.getUser(), request);
+        authService.verifyEmail(userDetails.getUser().getId(), request);
 
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/email-verification/resend")
     public ResponseEntity<Void> resendEmailVerification(@AuthenticationPrincipal UserDetailsImpl userDetails){
-        authService.resendEmailVerification(userDetails.getUser());
+        authService.resendEmailVerification(userDetails.getUser().getId());
 
         return ResponseEntity.noContent().build();
     }

@@ -1,6 +1,7 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.DeactivateAccountRequest;
+import io.github.joaomnz.bettracker.dto.UserProfileResponse;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.User;
@@ -21,20 +22,28 @@ public class UserService {
         this.emailService = emailService;
     }
 
-    @Transactional
-    public void deactivateAccount(Long userId, DeactivateAccountRequest request){
-        User freshUser = userRepository.findById(userId)
+    @Transactional(readOnly = true)
+    public UserProfileResponse getProfile(Long userId){
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found."));
 
-        if(!freshUser.isActive()){
+        return UserProfileResponse.fromEntity(user);
+    }
+
+    @Transactional
+    public void deactivateAccount(Long userId, DeactivateAccountRequest request){
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
+        if(!user.isActive()){
             throw new BusinessRuleException("Account is already deactivated.");
         }
 
-        if(!passwordEncoder.matches(request.password(), freshUser.getPassword())){
+        if(!passwordEncoder.matches(request.password(), user.getPassword())){
             throw new BusinessRuleException("Incorrect password.");
         }
 
-        freshUser.setActive(false);
-        emailService.sendDeactivationEmail(freshUser.getEmail(), freshUser.getName());
+        user.setActive(false);
+        emailService.sendDeactivationEmail(user.getEmail(), user.getName());
     }
 }

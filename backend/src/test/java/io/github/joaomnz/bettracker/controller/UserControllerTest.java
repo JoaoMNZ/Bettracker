@@ -15,6 +15,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -30,6 +31,24 @@ public class UserControllerTest extends IntegrationTest {
     @BeforeEach
     void setUp() {
         userRepository.deleteAll();
+    }
+
+    @Test
+    @DisplayName("Should return 200 OK and the user profile information when authenticated.")
+    void shouldReturnUserProfileSuccessfully() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+
+        performAuthenticatedJsonRequest(get(BASE_URL + "/me"), savedUser, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(savedUser.getId()))
+                .andExpect(jsonPath("$.name").value(savedUser.getName()))
+                .andExpect(jsonPath("$.email").value(savedUser.getEmail()))
+                .andExpect(jsonPath("$.unitValue").value(savedUser.getUnitValue().doubleValue()))
+                .andExpect(jsonPath("$.userType").value(savedUser.getUserType().name()))
+                .andExpect(jsonPath("$.verified").value(savedUser.isVerified()))
+                .andExpect(jsonPath("$.createdAt").exists())
+                .andExpect(jsonPath("$.updatedAt").isEmpty());
+
     }
 
     @Test

@@ -4,6 +4,7 @@ import io.github.joaomnz.bettracker.dto.*;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
+import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
 import io.github.joaomnz.bettracker.security.JwtService;
@@ -112,7 +113,10 @@ public class AuthService {
     }
 
     @Transactional(noRollbackFor = BusinessRuleException.class)
-    public void verifyEmail(User user, EmailVerificationRequest request){
+    public void verifyEmail(Long userId, EmailVerificationRequest request){
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
         if(user.isVerified()){
             throw new DataConflictException("User is already verified.");
         }
@@ -124,7 +128,10 @@ public class AuthService {
     }
 
     @Transactional
-    public void resendEmailVerification(User user){
+    public void resendEmailVerification(Long userId){
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
         if(user.isVerified()){
             throw new DataConflictException("User is already verified.");
         }
