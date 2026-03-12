@@ -1,9 +1,9 @@
 package io.github.joaomnz.bettracker.controller;
 
 import io.github.joaomnz.bettracker.IntegrationTest;
-import io.github.joaomnz.bettracker.dto.EmailVerificationRequest;
-import io.github.joaomnz.bettracker.dto.SignInRequest;
-import io.github.joaomnz.bettracker.dto.SignUpRequest;
+import io.github.joaomnz.bettracker.dto.auth.EmailVerificationRequest;
+import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
+import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
 import io.github.joaomnz.bettracker.enums.UserType;
 import io.github.joaomnz.bettracker.factory.OtpTokenFactory;
 import io.github.joaomnz.bettracker.factory.UserFactory;

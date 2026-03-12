@@ -1,9 +1,9 @@
 package io.github.joaomnz.bettracker.controller;
 
 import io.github.joaomnz.bettracker.IntegrationTest;
-import io.github.joaomnz.bettracker.dto.DeactivateAccountRequest;
-import io.github.joaomnz.bettracker.dto.UpdatePasswordRequest;
-import io.github.joaomnz.bettracker.dto.UpdateProfileRequest;
+import io.github.joaomnz.bettracker.dto.user.DeactivateAccountRequest;
+import io.github.joaomnz.bettracker.dto.user.UpdatePasswordRequest;
+import io.github.joaomnz.bettracker.dto.user.UpdateProfileRequest;
 import io.github.joaomnz.bettracker.factory.UserFactory;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;

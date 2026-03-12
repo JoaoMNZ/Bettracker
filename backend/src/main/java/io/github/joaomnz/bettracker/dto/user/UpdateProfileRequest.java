@@ -1,4 +1,4 @@
-package io.github.joaomnz.bettracker.dto;
+package io.github.joaomnz.bettracker.dto.user;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.*;

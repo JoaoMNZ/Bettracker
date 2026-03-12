@@ -1,6 +1,7 @@
-package io.github.joaomnz.bettracker.exception;
+package io.github.joaomnz.bettracker.exception.handler;
 
-import io.github.joaomnz.bettracker.dto.ErrorResponse;
+import io.github.joaomnz.bettracker.dto.common.ErrorResponse;
+import io.github.joaomnz.bettracker.exception.*;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

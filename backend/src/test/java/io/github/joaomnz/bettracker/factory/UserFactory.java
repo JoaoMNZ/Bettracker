@@ -1,7 +1,7 @@
 package io.github.joaomnz.bettracker.factory;
 
-import io.github.joaomnz.bettracker.dto.SignInRequest;
-import io.github.joaomnz.bettracker.dto.SignUpRequest;
+import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
+import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
 import io.github.joaomnz.bettracker.model.User;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;

@@ -1,6 +1,10 @@
 package io.github.joaomnz.bettracker.service;
 
-import io.github.joaomnz.bettracker.dto.*;
+import io.github.joaomnz.bettracker.dto.auth.AuthResponse;
+import io.github.joaomnz.bettracker.dto.auth.EmailVerificationRequest;
+import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
+import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
+import io.github.joaomnz.bettracker.dto.user.UserResponse;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;

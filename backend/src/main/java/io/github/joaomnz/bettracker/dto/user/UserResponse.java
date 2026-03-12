@@ -1,31 +1,26 @@
-package io.github.joaomnz.bettracker.dto;
+package io.github.joaomnz.bettracker.dto.user;
 
 import io.github.joaomnz.bettracker.enums.UserType;
 import io.github.joaomnz.bettracker.model.User;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
-public record UserProfileResponse(
+public record UserResponse(
         Long id,
         String name,
         String email,
         BigDecimal unitValue,
         UserType userType,
-        boolean verified,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        boolean verified
 ) {
-    public static UserProfileResponse fromEntity(User user){
-        return new UserProfileResponse(
+    public static UserResponse fromEntity(User user){
+        return new UserResponse(
                 user.getId(),
                 user.getName(),
                 user.getEmail(),
                 user.getUnitValue(),
                 user.getUserType(),
-                user.isVerified(),
-                user.getCreatedAt(),
-                user.getUpdatedAt()
+                user.isVerified()
         );
     }
 }

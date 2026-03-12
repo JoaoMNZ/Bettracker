@@ -1,4 +1,4 @@
-package io.github.joaomnz.bettracker.dto;
+package io.github.joaomnz.bettracker.dto.auth;
 
 import jakarta.validation.constraints.*;
 

@@ -1,9 +1,9 @@
 package io.github.joaomnz.bettracker.service;
 
-import io.github.joaomnz.bettracker.dto.DeactivateAccountRequest;
-import io.github.joaomnz.bettracker.dto.UpdatePasswordRequest;
-import io.github.joaomnz.bettracker.dto.UpdateProfileRequest;
-import io.github.joaomnz.bettracker.dto.UserProfileResponse;
+import io.github.joaomnz.bettracker.dto.user.DeactivateAccountRequest;
+import io.github.joaomnz.bettracker.dto.user.UpdatePasswordRequest;
+import io.github.joaomnz.bettracker.dto.user.UpdateProfileRequest;
+import io.github.joaomnz.bettracker.dto.user.UserProfileResponse;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.User;
