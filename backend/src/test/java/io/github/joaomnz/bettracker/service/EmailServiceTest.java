@@ -32,7 +32,7 @@ public class EmailServiceTest {
     }
 
     @Test
-    @DisplayName("Should construct and send a formatted verification email.")
+    @DisplayName("Should construct and send a formatted verification email for a new user.")
     void shouldSendVerificationEmailSuccessfully() {
         emailService.sendVerificationEmail(TARGET_EMAIL, TARGET_NAME, OTP, true);
 
@@ -43,8 +43,25 @@ public class EmailServiceTest {
 
         assertThat(capturedMessage.getFrom()).isEqualTo(SENDER_EMAIL);
         assertThat(capturedMessage.getTo()).containsExactly(TARGET_EMAIL);
-        assertThat(capturedMessage.getSubject()).isEqualTo("BetTracker - Verify your email");
+        assertThat(capturedMessage.getSubject()).isEqualTo("BetTracker - Email Verification");
+        assertThat(capturedMessage.getText()).contains("Welcome to BetTracker!");
         assertThat(capturedMessage.getText()).contains(OTP);
+    }
+
+    @Test
+    @DisplayName("Should construct and send a deactivation confirmation email.")
+    void shouldSendDeactivationEmailSuccessfully() {
+        emailService.sendDeactivationEmail(TARGET_EMAIL, TARGET_NAME);
+
+        ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(javaMailSender, times(1)).send(messageCaptor.capture());
+
+        SimpleMailMessage capturedMessage = messageCaptor.getValue();
+
+        assertThat(capturedMessage.getFrom()).isEqualTo(SENDER_EMAIL);
+        assertThat(capturedMessage.getTo()).containsExactly(TARGET_EMAIL);
+        assertThat(capturedMessage.getSubject()).isEqualTo("BetTracker - Account Deactivated");
+        assertThat(capturedMessage.getText()).contains("successfully deactivated");
     }
 
     @Test
