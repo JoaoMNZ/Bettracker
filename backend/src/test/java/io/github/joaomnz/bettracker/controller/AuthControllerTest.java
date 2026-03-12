@@ -168,6 +168,23 @@ public class AuthControllerTest extends IntegrationTest {
     }
 
     @Test
+    @DisplayName("Should reset failed login attempts to 0 upon successful sign in.")
+    void shouldResetFailedAttemptsOnSuccessfulLogin() throws Exception {
+        User user = UserFactory.createUser();
+        user.setFailedLoginAttempts(3);
+        userRepository.save(user);
+
+        SignInRequest signInRequest = UserFactory.createSignInRequest(user.getEmail(), UserFactory.DEFAULT_PASSWORD);
+
+        performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
+                .andExpect(status().isOk());
+
+        User updatedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertThat(updatedUser.getFailedLoginAttempts()).isEqualTo(0);
+        assertThat(updatedUser.getLockoutEnd()).isNull();
+    }
+
+    @Test
     @DisplayName("Should verify email successfully and return 204 No Content when provided with a valid OTP.")
     void shouldVerifyEmailSuccessfully() throws Exception{
         User savedUser = userRepository.save(UserFactory.createUser());
