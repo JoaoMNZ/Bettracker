@@ -46,6 +46,26 @@ public class EmailService {
     }
 
     @Async
+    public void sendPasswordChangeNotice(String to, String name) {
+        String subject = "Security Alert: Your Password Has Been Changed";
+        String text = String.format(
+                """
+                Hi %s,
+                
+                This email is to confirm that the password for your BetTracker account has been successfully changed.
+                
+                If you did not authorize this action, please contact our support team immediately so we can secure your account.
+                
+                Best regards,
+                The BetTracker Team
+                """,
+                name
+        );
+
+        sendEmail(to, subject, text);
+    }
+
+    @Async
     public void sendDeactivationEmail(String to, String name){
         String subject = "BetTracker - Account Deactivated";
         String text = String.format(

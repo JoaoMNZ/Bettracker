@@ -1,6 +1,7 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.DeactivateAccountRequest;
+import io.github.joaomnz.bettracker.dto.UpdatePasswordRequest;
 import io.github.joaomnz.bettracker.dto.UpdateProfileRequest;
 import io.github.joaomnz.bettracker.dto.UserProfileResponse;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
@@ -47,6 +48,24 @@ public class UserService {
         userRepository.saveAndFlush(user);
 
         return UserProfileResponse.fromEntity(user);
+    }
+
+    @Transactional
+    public void updatePassword(Long userId, UpdatePasswordRequest request){
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
+        if(!passwordEncoder.matches(request.oldPassword(), user.getPassword())){
+            throw new BusinessRuleException("Incorrect current password.");
+        }
+
+        if (passwordEncoder.matches(request.newPassword(), user.getPassword())) {
+            throw new BusinessRuleException("New password cannot be the same as your current password.");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+
+        emailService.sendPasswordChangeNotice(user.getEmail(), user.getName());
     }
 
     @Transactional

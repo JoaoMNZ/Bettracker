@@ -2,6 +2,7 @@ package io.github.joaomnz.bettracker.controller;
 
 import io.github.joaomnz.bettracker.IntegrationTest;
 import io.github.joaomnz.bettracker.dto.DeactivateAccountRequest;
+import io.github.joaomnz.bettracker.dto.UpdatePasswordRequest;
 import io.github.joaomnz.bettracker.dto.UpdateProfileRequest;
 import io.github.joaomnz.bettracker.factory.UserFactory;
 import io.github.joaomnz.bettracker.model.User;
@@ -137,6 +138,65 @@ public class UserControllerTest extends IntegrationTest {
         performAuthenticatedJsonRequest(patch(BASE_URL + "/me"), savedUser, request)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.validationErrors.unitValue").exists());
+    }
+
+    @Test
+    @DisplayName("Should update password, trigger email, and return 204 No Content when old password is correct.")
+    void shouldUpdatePasswordSuccessfully() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+        String newPassword = "NewStrongPassword123!";
+
+        UpdatePasswordRequest request = new UpdatePasswordRequest(UserFactory.DEFAULT_PASSWORD, newPassword);
+
+        performAuthenticatedJsonRequest(put(BASE_URL + "/me/password"), savedUser, request)
+                .andExpect(status().isNoContent());
+
+        User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+        assertThat(updatedUser.getPassword()).isNotEqualTo(savedUser.getPassword());
+
+        verify(emailService, times(1)).sendPasswordChangeNotice(savedUser.getEmail(), savedUser.getName());
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when current password is incorrect.")
+    void shouldReturn400WhenOldPasswordIsWrong() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+
+        UpdatePasswordRequest request = new UpdatePasswordRequest("incorrect-password", "new" + UserFactory.DEFAULT_PASSWORD);
+
+        performAuthenticatedJsonRequest(put(BASE_URL + "/me/password"), savedUser, request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Incorrect current password."));
+
+        verify(emailService, never()).sendPasswordChangeNotice(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when new password is the same as the old password.")
+    void shouldReturn400WhenNewPasswordIsSameAsOld() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+
+        UpdatePasswordRequest request = new UpdatePasswordRequest(UserFactory.DEFAULT_PASSWORD, UserFactory.DEFAULT_PASSWORD);
+
+        performAuthenticatedJsonRequest(put(BASE_URL + "/me/password"), savedUser, request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("New password cannot be the same as your current password."));
+
+        verify(emailService, never()).sendPasswordChangeNotice(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when new password does not meet complexity requirements.")
+    void shouldReturn400WhenNewPasswordIsWeak() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+
+        UpdatePasswordRequest request = new UpdatePasswordRequest(UserFactory.DEFAULT_PASSWORD, "weakpassword");
+
+        performAuthenticatedJsonRequest(put(BASE_URL + "/me/password"), savedUser, request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.validationErrors.newPassword").exists());
+
+        verify(emailService, never()).sendPasswordChangeNotice(anyString(), anyString());
     }
 
     @Test
