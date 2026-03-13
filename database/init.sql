@@ -10,7 +10,8 @@ CREATE TABLE users (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
     failed_login_attempts INT NOT NULL DEFAULT 0,
-    lockout_end TIMESTAMP
+    lockout_end TIMESTAMP,
+    pending_email VARCHAR(255)
 );
 
 CREATE TABLE otp_tokens(

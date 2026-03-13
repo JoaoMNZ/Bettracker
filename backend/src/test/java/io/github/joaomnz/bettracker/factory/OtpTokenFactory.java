@@ -23,12 +23,12 @@ public final class OtpTokenFactory {
         );
     }
 
-    public static OtpToken createEmailVerification(User user, LocalDateTime expiresAt) {
+    public static OtpToken createResetPassword(User user){
         return new OtpToken(
                 user,
                 PASSWORD_ENCODER.encode(DEFAULT_CODE),
-                OtpPurpose.EMAIL_VERIFICATION,
-                expiresAt
+                OtpPurpose.PASSWORD_RESET,
+                LocalDateTime.now().plusMinutes(15)
         );
     }
 }
