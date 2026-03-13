@@ -44,6 +44,26 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/me/email/request-change")
+    public ResponseEntity<Void> requestEmailChange(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @Valid @RequestBody RequestEmailChangeRequest request
+    ){
+        userService.requestEmailChange(userDetails.getUser().getId(), request);
+
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/me/email/verify-change")
+    public ResponseEntity<Void> verifyEmailChange(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @Valid @RequestBody VerifyEmailChangeRequest request
+    ){
+        userService.verifyEmailChange(userDetails.getUser().getId(), request);
+
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/me")
     public ResponseEntity<Void> deactivateMyAccount(
             @AuthenticationPrincipal UserDetailsImpl userDetails,

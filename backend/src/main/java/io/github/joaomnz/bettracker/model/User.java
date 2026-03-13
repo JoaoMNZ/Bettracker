@@ -51,6 +51,9 @@ public class User {
     @Column(name = "lockout_end")
     private LocalDateTime lockoutEnd;
 
+    @Column(name = "pending_email")
+    private String pendingEmail;
+
     @PrePersist
     public void prePersist(){
         createdAt = LocalDateTime.now();

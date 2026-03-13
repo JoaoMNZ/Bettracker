@@ -109,6 +109,51 @@ public class EmailService {
         sendEmail(to, subject, text);
     }
 
+    @Async
+    public void sendEmailChangeVerificationEmail(String to, String name, String otp) {
+        String subject = "BetTracker - Verify Your New Email Address";
+        String text = String.format(
+                """
+                Hi %s,
+                
+                We received a request to change the email address associated with your BetTracker account to this one.
+                
+                Your verification code is: %s
+                
+                This code will expire in 15 minutes.
+                
+                If you did not request this change, please ignore this email. Your account email will remain unchanged.
+                
+                Best regards,
+                The BetTracker Team
+                """,
+                name, otp
+        );
+
+        sendEmail(to, subject, text);
+    }
+
+    @Async
+    public void sendEmailChangeNotice(String oldEmail, String name) {
+        String subject = "Security Alert: Your BetTracker Email Was Changed";
+        String text = String.format(
+                """
+                Hi %s,
+                
+                This is an automated notification that the email address associated with your BetTracker account was recently changed.
+                
+                If you made this change, no further action is required.
+                
+                If you did NOT authorize this change, please contact our support team immediately.
+                
+                Best regards,
+                The BetTracker Team
+                """,
+                name
+        );
+        sendEmail(oldEmail, subject, text);
+    }
+
     private void sendEmail(String to, String subject, String text){
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(senderEmail);

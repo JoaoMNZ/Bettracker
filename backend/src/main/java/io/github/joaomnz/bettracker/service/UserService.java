@@ -3,6 +3,7 @@ package io.github.joaomnz.bettracker.service;
 import io.github.joaomnz.bettracker.dto.user.*;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
+import io.github.joaomnz.bettracker.exception.DataConflictException;
 import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
@@ -68,6 +69,49 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(request.newPassword()));
 
         emailService.sendPasswordChangeNotice(user.getEmail(), user.getName());
+    }
+
+    @Transactional
+    public void requestEmailChange(Long userId, RequestEmailChangeRequest request){
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
+        if(!passwordEncoder.matches(request.currentPassword(), user.getPassword())){
+            throw new BusinessRuleException("Incorrect current password.");
+        }
+
+        if(request.newEmail().equalsIgnoreCase(user.getEmail())){
+            throw new BusinessRuleException("The new email must be different from your current email.");
+        }
+
+        if(userRepository.existsByEmail(request.newEmail())){
+            throw new DataConflictException("The email address is already registered.");
+        }
+
+        user.setPendingEmail(request.newEmail());
+
+        String otp = otpTokenService.createOtp(user, OtpPurpose.EMAIL_CHANGE, LocalDateTime.now().plusMinutes(15));
+        emailService.sendEmailChangeVerificationEmail(request.newEmail(), user.getName(), otp);
+    }
+
+    @Transactional(noRollbackFor = BusinessRuleException.class)
+    public void verifyEmailChange(Long userId, VerifyEmailChangeRequest request){
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
+
+        if (user.getPendingEmail() == null) {
+            throw new BusinessRuleException("No email change request is currently pending.");
+        }
+
+        otpTokenService.verifyOtp(user, request.otp(), OtpPurpose.EMAIL_CHANGE);
+
+        String oldEmail = user.getEmail();
+
+        user.setEmail(user.getPendingEmail());
+        user.setPendingEmail(null);
+        user.setVerified(true);
+
+        emailService.sendEmailChangeNotice(oldEmail, user.getName());
     }
 
     @Transactional
