@@ -4,6 +4,8 @@ import io.github.joaomnz.bettracker.IntegrationTest;
 import io.github.joaomnz.bettracker.dto.auth.EmailVerificationRequest;
 import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
 import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
+import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
+import io.github.joaomnz.bettracker.dto.user.ResetPasswordRequest;
 import io.github.joaomnz.bettracker.enums.UserType;
 import io.github.joaomnz.bettracker.factory.OtpTokenFactory;
 import io.github.joaomnz.bettracker.factory.UserFactory;
@@ -23,12 +25,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.times;
 
 public class AuthControllerTest extends IntegrationTest {
     @Autowired
@@ -284,11 +285,93 @@ public class AuthControllerTest extends IntegrationTest {
                 .andExpect(jsonPath("$.error").value("Conflict"))
                 .andExpect(jsonPath("$.message").value("User is already verified."));
 
-        verify(emailService, times(0)).sendVerificationEmail(
+        verify(emailService, never()).sendVerificationEmail(
                 anyString(),
                 anyString(),
                 anyString(),
                 anyBoolean()
         );
+    }
+
+    @Test
+    @DisplayName("Should return 204 No Content and trigger email when forgot password is requested for an existing user.")
+    void shouldTriggerForgotPasswordSuccessfully() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+        ForgotPasswordRequest request = new ForgotPasswordRequest(savedUser.getEmail());
+
+        performJsonRequest(post(BASE_URL + "/forgot-password"), request)
+                .andExpect(status().isNoContent());
+
+        verify(emailService, times(1)).sendPasswordResetEmail(eq(savedUser.getEmail()), eq(savedUser.getName()), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 204 No Content but NOT trigger email when forgot password is requested for a non-existent email.")
+    void shouldNotTriggerEmailForUnknownUserOnForgotPassword() throws Exception {
+        ForgotPasswordRequest request = new ForgotPasswordRequest("doesnotexist@example.com");
+
+        performJsonRequest(post(BASE_URL + "/forgot-password"), request)
+                .andExpect(status().isNoContent());
+
+        verify(emailService, never()).sendPasswordResetEmail(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should reset password, trigger notice email, and return 204 No Content when provided with valid data.")
+    void shouldResetPasswordSuccessfully() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+        otpTokenRepository.save(OtpTokenFactory.createResetPassword(savedUser));
+
+        ResetPasswordRequest request = new ResetPasswordRequest(savedUser.getEmail(), OtpTokenFactory.DEFAULT_CODE, "new" + UserFactory.DEFAULT_PASSWORD);
+
+        performJsonRequest(post(BASE_URL + "/reset-password"), request)
+                .andExpect(status().isNoContent());
+
+        User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+        assertThat(updatedUser.getPassword()).isNotEqualTo(savedUser.getPassword());
+
+        verify(emailService, times(1)).sendPasswordChangeNotice(savedUser.getEmail(), savedUser.getName());
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found and match missing OTP error when email does not exist on reset password.")
+    void shouldReturn404OnResetPasswordWhenEmailDoesNotExist() throws Exception {
+        ResetPasswordRequest request = new ResetPasswordRequest("nobody@example.com", OtpTokenFactory.DEFAULT_CODE, "new" + UserFactory.DEFAULT_PASSWORD);
+
+        performJsonRequest(post(BASE_URL + "/reset-password"), request)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("No verification code was requested."));
+
+        verify(emailService, never()).sendPasswordChangeNotice(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when OTP is invalid on reset password.")
+    void shouldReturn400OnResetPasswordWhenOtpIsInvalid() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+        otpTokenRepository.save(OtpTokenFactory.createResetPassword(savedUser));
+
+        ResetPasswordRequest request = new ResetPasswordRequest(savedUser.getEmail(), "111111", "new" + UserFactory.DEFAULT_PASSWORD);
+
+        performJsonRequest(post(BASE_URL + "/reset-password"), request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid verification code. You have 2 attempt(s) left."));
+
+        verify(emailService, never()).sendPasswordChangeNotice(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when new password matches the current password on reset password.")
+    void shouldReturn400OnResetPasswordWhenPasswordIsSame() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+        otpTokenRepository.save(OtpTokenFactory.createResetPassword(savedUser));;
+
+        ResetPasswordRequest request = new ResetPasswordRequest(savedUser.getEmail(), OtpTokenFactory.DEFAULT_CODE, UserFactory.DEFAULT_PASSWORD);
+
+        performJsonRequest(post(BASE_URL + "/reset-password"), request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("New password cannot be the same as your current password."));
+
+        verify(emailService, never()).sendPasswordChangeNotice(anyString(), anyString());
     }
 }

@@ -4,6 +4,8 @@ import io.github.joaomnz.bettracker.dto.auth.AuthResponse;
 import io.github.joaomnz.bettracker.dto.auth.EmailVerificationRequest;
 import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
 import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
+import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
+import io.github.joaomnz.bettracker.dto.user.ResetPasswordRequest;
 import io.github.joaomnz.bettracker.dto.user.UserResponse;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 
 @Service
 public class AuthService {
@@ -147,5 +150,37 @@ public class AuthService {
         );
 
         emailService.sendVerificationEmail(user.getEmail(), user.getName(), otp, false);
+    }
+
+    @Transactional
+    public void forgotPassword(ForgotPasswordRequest request){
+        userRepository.findByEmail(request.email())
+                .ifPresent(user -> {
+                    String otp = otpTokenService.createOtp(
+                            user,
+                            OtpPurpose.PASSWORD_RESET,
+                            LocalDateTime.now().plusMinutes(15)
+                    );
+
+                    emailService.sendPasswordResetEmail(user.getEmail(), user.getName(), otp);
+                });
+    }
+
+    @Transactional(noRollbackFor = BusinessRuleException.class)
+    public void resetPassword(ResetPasswordRequest request){
+        // Prevents email enumeration. By mimicking the error for a missing OTP, attackers cannot distinguish between an unregistered email and an inactive reset request.
+        User user = userRepository.findByEmail(request.email())
+                .orElseThrow(() -> new ResourceNotFoundException("No verification code was requested."));
+
+        otpTokenService.verifyOtp(user, request.otp(), OtpPurpose.PASSWORD_RESET);
+
+        if (passwordEncoder.matches(request.newPassword(), user.getPassword())) {
+            throw new BusinessRuleException("New password cannot be the same as your current password.");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+
+        emailService.sendPasswordChangeNotice(user.getEmail(), user.getName());
     }
 }

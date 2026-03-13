@@ -1,9 +1,7 @@
 package io.github.joaomnz.bettracker.service;
 
-import io.github.joaomnz.bettracker.dto.user.DeactivateAccountRequest;
-import io.github.joaomnz.bettracker.dto.user.UpdatePasswordRequest;
-import io.github.joaomnz.bettracker.dto.user.UpdateProfileRequest;
-import io.github.joaomnz.bettracker.dto.user.UserProfileResponse;
+import io.github.joaomnz.bettracker.dto.user.*;
+import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.User;
@@ -12,16 +10,20 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 @Service
 public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final OtpTokenService otpTokenService;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, EmailService emailService) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, EmailService emailService, OtpTokenService otpTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
+        this.otpTokenService = otpTokenService;
     }
 
     @Transactional(readOnly = true)

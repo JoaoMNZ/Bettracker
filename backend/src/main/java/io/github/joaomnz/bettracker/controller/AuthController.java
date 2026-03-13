@@ -4,6 +4,8 @@ import io.github.joaomnz.bettracker.dto.auth.AuthResponse;
 import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
 import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
 import io.github.joaomnz.bettracker.dto.auth.EmailVerificationRequest;
+import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
+import io.github.joaomnz.bettracker.dto.user.ResetPasswordRequest;
 import io.github.joaomnz.bettracker.security.UserDetailsImpl;
 import io.github.joaomnz.bettracker.service.AuthService;
 import jakarta.validation.Valid;
@@ -54,6 +56,20 @@ public class AuthController {
     @PostMapping("/email-verification/resend")
     public ResponseEntity<Void> resendEmailVerification(@AuthenticationPrincipal UserDetailsImpl userDetails){
         authService.resendEmailVerification(userDetails.getUser().getId());
+
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request){
+        authService.forgotPassword(request);
+
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request){
+        authService.resetPassword(request);
 
         return ResponseEntity.noContent().build();
     }

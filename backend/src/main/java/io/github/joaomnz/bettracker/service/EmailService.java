@@ -85,6 +85,30 @@ public class EmailService {
         sendEmail(to, subject, text);
     }
 
+    @Async
+    public void sendPasswordResetEmail(String to, String name, String otp) {
+        String subject = "BetTracker - Password Reset Code";
+        String text = String.format(
+                """
+                Hi %s,
+                
+                We received a request to reset the password for your BetTracker account.
+                
+                Your password reset code is: %s
+                
+                This code will expire in 15 minutes.
+                
+                If you did not request a password reset, you can safely ignore this email. Your password will not be changed.
+                
+                Best regards,
+                The BetTracker Team
+                """,
+                name, otp
+        );
+
+        sendEmail(to, subject, text);
+    }
+
     private void sendEmail(String to, String subject, String text){
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(senderEmail);
