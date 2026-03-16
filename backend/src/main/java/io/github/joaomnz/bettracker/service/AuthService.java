@@ -1,9 +1,6 @@
 package io.github.joaomnz.bettracker.service;
 
-import io.github.joaomnz.bettracker.dto.auth.AuthResponse;
-import io.github.joaomnz.bettracker.dto.auth.EmailVerificationRequest;
-import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
-import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
+import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.dto.user.ResetPasswordRequest;
 import io.github.joaomnz.bettracker.dto.user.UserResponse;
@@ -26,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Optional;
 
 @Service
 public class AuthService {
@@ -34,14 +30,16 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
     private final OtpTokenService otpTokenService;
     private final EmailService emailService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtService jwtService, OtpTokenService otpTokenService, EmailService emailService) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtService jwtService, RefreshTokenService refreshTokenService, OtpTokenService otpTokenService, EmailService emailService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
+        this.refreshTokenService = refreshTokenService;
         this.otpTokenService = otpTokenService;
         this.emailService = emailService;
     }
@@ -70,6 +68,7 @@ public class AuthService {
         emailService.sendVerificationEmail(savedUser.getEmail(), savedUser.getName(), otp, true);
 
         return new AuthResponse(
+                refreshTokenService.generateToken(savedUser),
                 jwtService.generateToken(new UserDetailsImpl(savedUser)),
                 UserResponse.fromEntity(savedUser)
         );
@@ -98,8 +97,9 @@ public class AuthService {
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
 
             return new AuthResponse(
-                    jwtService.generateToken(userDetails),
-                    UserResponse.fromEntity(userDetails.getUser())
+                    refreshTokenService.generateToken(user),
+                    jwtService.generateToken(new UserDetailsImpl(user)),
+                    UserResponse.fromEntity(user)
             );
 
         } catch(BadCredentialsException exception) {
@@ -117,6 +117,14 @@ public class AuthService {
         } finally {
             userRepository.save(user);
         }
+    }
+
+    public RefreshTokenResponse refresh(RefreshTokenRequest request){
+        User user = refreshTokenService.verifyToken(request.refreshToken());
+
+        String newAccessToken = jwtService.generateToken(new UserDetailsImpl(user));
+
+        return new RefreshTokenResponse(newAccessToken);
     }
 
     @Transactional(noRollbackFor = BusinessRuleException.class)

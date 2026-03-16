@@ -1,13 +1,14 @@
 package io.github.joaomnz.bettracker.controller;
 
 import io.github.joaomnz.bettracker.IntegrationTest;
-import io.github.joaomnz.bettracker.dto.user.DeactivateAccountRequest;
-import io.github.joaomnz.bettracker.dto.user.UpdatePasswordRequest;
-import io.github.joaomnz.bettracker.dto.user.UpdateProfileRequest;
+import io.github.joaomnz.bettracker.dto.user.*;
+import io.github.joaomnz.bettracker.factory.OtpTokenFactory;
 import io.github.joaomnz.bettracker.factory.UserFactory;
 import io.github.joaomnz.bettracker.model.User;
+import io.github.joaomnz.bettracker.repository.OtpTokenRepository;
 import io.github.joaomnz.bettracker.repository.UserRepository;
 import io.github.joaomnz.bettracker.service.EmailService;
+import io.github.joaomnz.bettracker.service.OtpTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class UserControllerTest extends IntegrationTest {
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private OtpTokenRepository otpTokenRepository;
 
     @MockitoBean
     private EmailService emailService;
@@ -197,6 +201,130 @@ public class UserControllerTest extends IntegrationTest {
                 .andExpect(jsonPath("$.validationErrors.newPassword").exists());
 
         verify(emailService, never()).sendPasswordChangeNotice(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 204 No Content, save pending email, and trigger OTP email when requesting an email change.")
+    void shouldRequestEmailChangeSuccessfully() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+        String newEmail = "new.email@example.com";
+
+        RequestEmailChangeRequest request = new RequestEmailChangeRequest(newEmail, UserFactory.DEFAULT_PASSWORD);
+
+        performAuthenticatedJsonRequest(post(BASE_URL + "/me/email/request-change"), savedUser, request)
+                .andExpect(status().isNoContent());
+
+        User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+        assertThat(updatedUser.getPendingEmail()).isEqualTo(newEmail);
+
+        verify(emailService, times(1)).sendEmailChangeVerificationEmail(eq(newEmail), eq(savedUser.getName()), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when current password is wrong during email change request.")
+    void shouldReturn400WhenPasswordIsWrongOnEmailChange() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+        String newEmail = "new.email@example.com";
+        String invalidPassword = "wrong-password";
+
+        RequestEmailChangeRequest request = new RequestEmailChangeRequest(newEmail, invalidPassword);
+
+        performAuthenticatedJsonRequest(post(BASE_URL + "/me/email/request-change"), savedUser, request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Incorrect current password."));
+
+        verify(emailService, never()).sendEmailChangeVerificationEmail(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when new email is the same as the current email.")
+    void shouldReturn400WhenNewEmailIsSameAsCurrent() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+
+        RequestEmailChangeRequest request = new RequestEmailChangeRequest(savedUser.getEmail(), UserFactory.DEFAULT_PASSWORD);
+
+        performAuthenticatedJsonRequest(post(BASE_URL + "/me/email/request-change"), savedUser, request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("The new email must be different from your current email."));
+
+        verify(emailService, never()).sendEmailChangeVerificationEmail(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 409 Conflict when attempting to change to an email that is already taken.")
+    void shouldReturn409WhenNewEmailIsAlreadyRegistered() throws Exception {
+        User firstUser = userRepository.save(UserFactory.createUser());
+        User secondUser = userRepository.save(UserFactory.createUser("taken@example.com"));
+
+        RequestEmailChangeRequest request = new RequestEmailChangeRequest(secondUser.getEmail(), UserFactory.DEFAULT_PASSWORD);
+
+        performAuthenticatedJsonRequest(post(BASE_URL + "/me/email/request-change"), firstUser, request)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("The email address is already registered."));
+
+        verify(emailService, never()).sendEmailChangeVerificationEmail(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 204 No Content, update email, clear pending, set verified, and trigger notice when verifying email change.")
+    void shouldVerifyEmailChangeSuccessfully() throws Exception {
+        User user = UserFactory.createUser();
+        String oldEmail = user.getEmail();
+        String pendingEmail = "new.verified@example.com";
+        user.setPendingEmail(pendingEmail);
+        User savedUser = userRepository.save(user);
+
+        otpTokenRepository.save(OtpTokenFactory.createEmailChange(user));
+
+        VerifyEmailChangeRequest request = new VerifyEmailChangeRequest(OtpTokenFactory.DEFAULT_CODE);
+
+        performAuthenticatedJsonRequest(post(BASE_URL + "/me/email/verify-change"), savedUser, request)
+                .andExpect(status().isNoContent());
+
+        User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+        assertThat(updatedUser.getEmail()).isEqualTo(pendingEmail);
+        assertThat(updatedUser.getPendingEmail()).isNull();
+        assertThat(updatedUser.isVerified()).isTrue();
+
+        verify(emailService, times(1)).sendEmailChangeNotice(eq(oldEmail), eq(savedUser.getName()));
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when attempting to verify an email change without a pending request.")
+    void shouldReturn400OnVerifyEmailChangeWhenNoPendingEmail() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+
+        VerifyEmailChangeRequest request = new VerifyEmailChangeRequest(OtpTokenFactory.DEFAULT_CODE);
+
+        performAuthenticatedJsonRequest(post(BASE_URL + "/me/email/verify-change"), savedUser, request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("No email change request is currently pending."));
+
+        verify(emailService, never()).sendEmailChangeNotice(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when OTP is invalid during email change verification.")
+    void shouldReturn400OnVerifyEmailChangeWhenOtpIsInvalid() throws Exception {
+        User user = UserFactory.createUser();
+        user.setPendingEmail("new.email@example.com");
+        User savedUser = userRepository.save(user);
+
+        otpTokenRepository.save(OtpTokenFactory.createEmailChange(user));
+
+        String invalidOtp = "111111";
+        VerifyEmailChangeRequest request = new VerifyEmailChangeRequest(invalidOtp);
+
+        performAuthenticatedJsonRequest(post(BASE_URL + "/me/email/verify-change"), savedUser, request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid verification code. You have 2 attempt(s) left."));
+
+        User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+
+        assertThat(updatedUser.getPendingEmail()).isNotNull();
+        assertThat(updatedUser.getEmail()).isNotEqualTo(user.getPendingEmail());
+
+        verify(emailService, never()).sendEmailChangeNotice(anyString(), anyString());
     }
 
     @Test
