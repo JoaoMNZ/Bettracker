@@ -14,7 +14,7 @@ CREATE TABLE users (
     pending_email VARCHAR(255)
 );
 
-CREATE TABLE otp_tokens(
+CREATE TABLE otp_tokens (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     code VARCHAR(255) NOT NULL,
@@ -25,4 +25,14 @@ CREATE TABLE otp_tokens(
     failed_attempts INT NOT NULL DEFAULT 0,
 
     CONSTRAINT fk_users_otp_tokens FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-)
+);
+
+
+CREATE TABLE refresh_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    token VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+
+    CONSTRAINT fk_users_refresh_tokens FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);

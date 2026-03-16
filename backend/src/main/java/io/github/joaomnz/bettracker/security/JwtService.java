@@ -61,6 +61,6 @@ public class JwtService {
     }
 
     private Instant expiration(){
-        return Instant.now().plus(4, ChronoUnit.HOURS);
+        return Instant.now().plus(15, ChronoUnit.MINUTES);
     }
 }

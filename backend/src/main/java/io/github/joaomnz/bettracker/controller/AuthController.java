@@ -1,9 +1,6 @@
 package io.github.joaomnz.bettracker.controller;
 
-import io.github.joaomnz.bettracker.dto.auth.AuthResponse;
-import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
-import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
-import io.github.joaomnz.bettracker.dto.auth.EmailVerificationRequest;
+import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.dto.user.ResetPasswordRequest;
 import io.github.joaomnz.bettracker.security.UserDetailsImpl;
@@ -39,6 +36,13 @@ public class AuthController {
     @PostMapping("/signin")
     public ResponseEntity<AuthResponse> signIn(@Valid @RequestBody SignInRequest request){
         AuthResponse response = authService.signIn(request);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<RefreshTokenResponse> refresh(@Valid @RequestBody RefreshTokenRequest request){
+        RefreshTokenResponse response = authService.refresh(request);
 
         return ResponseEntity.ok(response);
     }
