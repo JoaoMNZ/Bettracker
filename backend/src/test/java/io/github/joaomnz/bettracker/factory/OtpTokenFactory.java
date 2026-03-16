@@ -31,4 +31,13 @@ public final class OtpTokenFactory {
                 LocalDateTime.now().plusMinutes(15)
         );
     }
+
+    public static OtpToken createEmailChange(User user){
+        return new OtpToken(
+                user,
+                PASSWORD_ENCODER.encode(DEFAULT_CODE),
+                OtpPurpose.EMAIL_CHANGE,
+                LocalDateTime.now().plusMinutes(15)
+        );
+    }
 }
