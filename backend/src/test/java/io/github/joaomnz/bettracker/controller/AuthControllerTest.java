@@ -1,17 +1,17 @@
 package io.github.joaomnz.bettracker.controller;
 
 import io.github.joaomnz.bettracker.IntegrationTest;
-import io.github.joaomnz.bettracker.dto.auth.EmailVerificationRequest;
-import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
-import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
+import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.dto.user.ResetPasswordRequest;
 import io.github.joaomnz.bettracker.enums.UserType;
 import io.github.joaomnz.bettracker.factory.OtpTokenFactory;
+import io.github.joaomnz.bettracker.factory.RefreshTokenFactory;
 import io.github.joaomnz.bettracker.factory.UserFactory;
 import io.github.joaomnz.bettracker.model.OtpToken;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.OtpTokenRepository;
+import io.github.joaomnz.bettracker.repository.RefreshTokenRepository;
 import io.github.joaomnz.bettracker.repository.UserRepository;
 import io.github.joaomnz.bettracker.service.EmailService;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +36,10 @@ public class AuthControllerTest extends IntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    OtpTokenRepository otpTokenRepository;
+    private OtpTokenRepository otpTokenRepository;
+
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
 
     // Prevents real SMTP network calls and avoids spamming Mailtrap during test execution.
     @MockitoBean
@@ -48,6 +51,7 @@ public class AuthControllerTest extends IntegrationTest {
     void setUp() {
         otpTokenRepository.deleteAll();
         userRepository.deleteAll();
+        refreshTokenRepository.deleteAll();
     }
 
     @Test
@@ -56,7 +60,8 @@ public class AuthControllerTest extends IntegrationTest {
         SignUpRequest signUpRequest = UserFactory.createSignUpRequest();
         performJsonRequest(post(BASE_URL + "/signup"), signUpRequest)
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.user.name").value(signUpRequest.name()))
                 .andExpect(jsonPath("$.user.email").value(signUpRequest.email()))
                 .andExpect(jsonPath("$.user.unitValue").value(signUpRequest.unitValue().doubleValue()))
@@ -64,6 +69,7 @@ public class AuthControllerTest extends IntegrationTest {
                 .andExpect(jsonPath("$.user.verified").value(Boolean.FALSE));
 
         assertThat(userRepository.count()).isEqualTo(1);
+        assertThat(refreshTokenRepository.count()).isEqualTo(1);
         verify(emailService, times(1)).sendVerificationEmail(
                 eq(signUpRequest.email()),
                 eq(signUpRequest.name()),
@@ -112,12 +118,15 @@ public class AuthControllerTest extends IntegrationTest {
 
         performJsonRequest(post(BASE_URL + "/signin"), signInRequest)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.user.name").value(user.getName()))
                 .andExpect(jsonPath("$.user.email").value(user.getEmail()))
                 .andExpect(jsonPath("$.user.unitValue").value(user.getUnitValue().doubleValue()))
                 .andExpect(jsonPath("$.user.userType").value(UserType.FREE.name()))
                 .andExpect(jsonPath("$.user.verified").value(Boolean.FALSE));
+
+        assertThat(refreshTokenRepository.count()).isEqualTo(1);
     }
 
     @Test
@@ -373,5 +382,58 @@ public class AuthControllerTest extends IntegrationTest {
                 .andExpect(jsonPath("$.message").value("New password cannot be the same as your current password."));
 
         verify(emailService, never()).sendPasswordChangeNotice(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return 200 OK with new tokens on successful refresh.")
+    void shouldReturn200OnRefresh() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+        refreshTokenRepository.save(RefreshTokenFactory.createValidToken(savedUser));
+
+        RefreshTokenRequest request = new RefreshTokenRequest(RefreshTokenFactory.VALID_RAW_TOKEN);
+
+        performJsonRequest(post(BASE_URL + "/refresh"), request)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("Should return 204 No Content on logout.")
+    void shouldReturn204OnLogout() throws Exception {
+        User savedUser = userRepository.save(UserFactory.createUser());
+        refreshTokenRepository.save(RefreshTokenFactory.createValidToken(savedUser));
+
+        LogoutRequest request = new LogoutRequest(RefreshTokenFactory.VALID_RAW_TOKEN);
+
+        performJsonRequest(post(BASE_URL + "/logout"), request)
+                .andExpect(status().isNoContent());
+
+        assertThat(refreshTokenRepository.count()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("Should not allow reuse of refresh token after it has been consumed.")
+    void shouldNotAllowReuseOfRefreshToken() throws Exception {
+        User user = userRepository.save(UserFactory.createUser());
+        refreshTokenRepository.save(RefreshTokenFactory.createValidToken(user));
+
+        RefreshTokenRequest request = new RefreshTokenRequest(RefreshTokenFactory.VALID_RAW_TOKEN);
+
+        performJsonRequest(post(BASE_URL + "/refresh"), request)
+                .andExpect(status().isOk());
+
+        performJsonRequest(post(BASE_URL + "/refresh"), request)
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when token format is invalid.")
+    void shouldReturn400WhenTokenFormatIsInvalid() throws Exception {
+        LogoutRequest request = new LogoutRequest("too-short");
+
+        performJsonRequest(post(BASE_URL + "/logout"), request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.validationErrors.refreshToken").exists());
     }
 }

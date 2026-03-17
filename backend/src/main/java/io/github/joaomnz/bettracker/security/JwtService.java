@@ -31,12 +31,13 @@ public class JwtService {
                     .map(GrantedAuthority::getAuthority)
                     .toList();
 
+            Instant now = Instant.now();
             return JWT.create()
                     .withIssuer(issuer)
                     .withSubject(userDetails.getUsername())
                     .withClaim("roles", roles)
-                    .withIssuedAt(issuedAt())
-                    .withExpiresAt(expiration())
+                    .withIssuedAt(now)
+                    .withExpiresAt(now.plus(15, ChronoUnit.MINUTES))
                     .sign(algorithm);
         }catch(JWTCreationException exception){
             throw new JwtGenerationException("Failed to generate JWT token.", exception);
@@ -54,13 +55,5 @@ public class JwtService {
             // Returns null so the SecurityFilter can deny access without throwing a 500 error.
             return null;
         }
-    }
-
-    private Instant issuedAt(){
-        return Instant.now();
-    }
-
-    private Instant expiration(){
-        return Instant.now().plus(15, ChronoUnit.MINUTES);
     }
 }

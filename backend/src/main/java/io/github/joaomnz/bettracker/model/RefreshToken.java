@@ -9,7 +9,7 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "refresh_token")
+@Table(name = "refresh_tokens")
 @NoArgsConstructor
 @Getter @Setter
 @EqualsAndHashCode(of = "id")
@@ -22,11 +22,27 @@ public class RefreshToken {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String token;
 
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    void prePersist(){
+        createdAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    void preUpdate(){
+        updatedAt = LocalDateTime.now();
+    }
 
     public RefreshToken(User user, String token, LocalDateTime expiresAt) {
         this.user = user;

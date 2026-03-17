@@ -1,11 +1,11 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
-import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.RefreshToken;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.RefreshTokenRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -13,6 +13,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.List;
 
 @Service
 public class RefreshTokenService {
@@ -28,7 +29,14 @@ public class RefreshTokenService {
         this.encoder = Base64.getEncoder();
     }
 
+    @Transactional
     public String generateToken(User user){
+        List<RefreshToken> activeTokens = refreshTokenRepository.findAllByUserOrderByExpiresAtAsc(user);
+
+        if(activeTokens.size() >= 5){
+            refreshTokenRepository.delete(activeTokens.getFirst());
+        }
+
         String rawToken = generateRawToken();
 
         refreshTokenRepository.save(
@@ -42,7 +50,8 @@ public class RefreshTokenService {
         return rawToken;
     }
 
-    public User verifyToken(String rawToken){
+    @Transactional(noRollbackFor = BusinessRuleException.class)
+    public User consumeToken(String rawToken){
         RefreshToken refreshToken = refreshTokenRepository.findByToken(hashToken(rawToken))
                 .orElseThrow(() -> new BusinessRuleException("Invalid refresh token."));
 
@@ -51,7 +60,15 @@ public class RefreshTokenService {
             throw new BusinessRuleException("Refresh token has expired. Please sign in again.");
         }
 
+        refreshTokenRepository.delete(refreshToken);
+
         return refreshToken.getUser();
+    }
+
+    @Transactional
+    public void revokeToken(String rawToken){
+        refreshTokenRepository.findByToken(hashToken(rawToken))
+                .ifPresent(refreshTokenRepository::delete);
     }
 
     private String generateRawToken(){
