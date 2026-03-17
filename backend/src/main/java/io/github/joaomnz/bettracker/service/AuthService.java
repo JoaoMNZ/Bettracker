@@ -119,12 +119,23 @@ public class AuthService {
         }
     }
 
-    public RefreshTokenResponse refresh(RefreshTokenRequest request){
-        User user = refreshTokenService.verifyToken(request.refreshToken());
+    @Transactional(noRollbackFor = BusinessRuleException.class)
+    public AuthResponse refresh(RefreshTokenRequest request){
+        User user = refreshTokenService.consumeToken(request.refreshToken());
 
+        String newRefreshToken = refreshTokenService.generateToken(user);
         String newAccessToken = jwtService.generateToken(new UserDetailsImpl(user));
 
-        return new RefreshTokenResponse(newAccessToken);
+        return new AuthResponse(
+                newRefreshToken,
+                newAccessToken,
+                UserResponse.fromEntity(user)
+        );
+    }
+
+    @Transactional
+    public void logout(LogoutRequest request){
+        refreshTokenService.revokeToken(request.refreshToken());
     }
 
     @Transactional(noRollbackFor = BusinessRuleException.class)

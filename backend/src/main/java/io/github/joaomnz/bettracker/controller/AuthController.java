@@ -41,10 +41,17 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<RefreshTokenResponse> refresh(@Valid @RequestBody RefreshTokenRequest request){
-        RefreshTokenResponse response = authService.refresh(request);
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request){
+        AuthResponse response = authService.refresh(request);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@Valid @RequestBody LogoutRequest request){
+        authService.logout(request);
+
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/email-verification")

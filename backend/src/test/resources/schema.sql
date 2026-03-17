@@ -30,8 +30,10 @@ CREATE TABLE otp_tokens(
 CREATE TABLE refresh_tokens (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
-    token VARCHAR(255) NOT NULL,
+    token VARCHAR(255) NOT NULL UNIQUE,
     expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP,
 
     CONSTRAINT fk_users_refresh_tokens FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
