@@ -4,6 +4,7 @@ import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.model.RefreshToken;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.RefreshTokenRepository;
+import io.github.joaomnz.bettracker.util.TokenUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,12 +38,12 @@ public class RefreshTokenService {
             refreshTokenRepository.delete(activeTokens.getFirst());
         }
 
-        String rawToken = generateRawToken();
+        String rawToken = TokenUtil.generateRawToken();
 
         refreshTokenRepository.save(
                 new RefreshToken(
                         user,
-                        hashToken(rawToken),
+                        TokenUtil.hashToken(rawToken),
                         LocalDateTime.now().plusDays(7)
                 )
         );
@@ -52,7 +53,7 @@ public class RefreshTokenService {
 
     @Transactional(noRollbackFor = BusinessRuleException.class)
     public User consumeToken(String rawToken){
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(hashToken(rawToken))
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(TokenUtil.hashToken(rawToken))
                 .orElseThrow(() -> new BusinessRuleException("Invalid refresh token."));
 
         if(refreshToken.getExpiresAt().isBefore(LocalDateTime.now())){
@@ -67,23 +68,7 @@ public class RefreshTokenService {
 
     @Transactional
     public void revokeToken(String rawToken){
-        refreshTokenRepository.findByToken(hashToken(rawToken))
+        refreshTokenRepository.findByToken(TokenUtil.hashToken(rawToken))
                 .ifPresent(refreshTokenRepository::delete);
-    }
-
-    private String generateRawToken(){
-        byte[] randomBytes = new byte[32];
-        secureRandom.nextBytes(randomBytes);
-        return urlEncoder.encodeToString(randomBytes);
-    }
-
-    private String hashToken(String rawToken){
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
-            return encoder.encodeToString(hash);
-        } catch(NoSuchAlgorithmException exception){
-            throw new IllegalStateException("Required algorithm not available", exception);
-        }
     }
 }
