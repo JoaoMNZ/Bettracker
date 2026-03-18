@@ -1,5 +1,6 @@
 package io.github.joaomnz.bettracker.model;
 
+import io.github.joaomnz.bettracker.enums.AuthProvider;
 import io.github.joaomnz.bettracker.enums.UserType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -23,8 +24,15 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(nullable = false)
+    @Column
     private String password;
+
+    @Column(name = "auth_provider", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private AuthProvider authProvider = AuthProvider.LOCAL;
+
+    @Column(name = "google_id", unique = true)
+    private String googleId;
 
     @Column(nullable = false, name = "unit_value", precision = 19, scale = 4)
     private BigDecimal unitValue;

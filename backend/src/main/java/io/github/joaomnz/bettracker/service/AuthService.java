@@ -4,6 +4,7 @@ import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.dto.user.ResetPasswordRequest;
 import io.github.joaomnz.bettracker.dto.user.UserResponse;
+import io.github.joaomnz.bettracker.enums.AuthProvider;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
@@ -12,15 +13,13 @@ import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
 import io.github.joaomnz.bettracker.security.JwtService;
 import io.github.joaomnz.bettracker.security.UserDetailsImpl;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.LockedException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.xml.crypto.Data;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -33,8 +32,9 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final OtpTokenService otpTokenService;
     private final EmailService emailService;
+    private final GoogleAuthService googleAuthService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtService jwtService, RefreshTokenService refreshTokenService, OtpTokenService otpTokenService, EmailService emailService) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtService jwtService, RefreshTokenService refreshTokenService, OtpTokenService otpTokenService, EmailService emailService, GoogleAuthService googleAuthService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
@@ -42,6 +42,7 @@ public class AuthService {
         this.refreshTokenService = refreshTokenService;
         this.otpTokenService = otpTokenService;
         this.emailService = emailService;
+        this.googleAuthService = googleAuthService;
     }
 
     @Transactional
@@ -117,6 +118,63 @@ public class AuthService {
         } finally {
             userRepository.save(user);
         }
+    }
+
+    public AuthResponse authenticateWithGoogle(GoogleLoginRequest request){
+        GoogleUserInfo googleUserInfo = googleAuthService.verifyToken(request.token());
+
+        return processTransactionalGoogleLogin(googleUserInfo);
+    }
+
+    @Transactional
+    protected AuthResponse processTransactionalGoogleLogin(GoogleUserInfo googleUserInfo) {
+        User user = userRepository.findByGoogleId(googleUserInfo.googleId())
+                .orElseGet(() -> handleGoogleMergeOrCreate(googleUserInfo));
+
+        if (!user.isActive()) {
+            throw new DisabledException("Your account has been deactivated. Please contact support to reactivate it.");
+        }
+
+        return new AuthResponse(
+                refreshTokenService.generateToken(user),
+                jwtService.generateToken(new UserDetailsImpl(user)),
+                UserResponse.fromEntity(user)
+        );
+    }
+
+    private User handleGoogleMergeOrCreate(GoogleUserInfo googleUserInfo) {
+        return userRepository.findByEmail(googleUserInfo.email())
+                .map(existingUser -> {
+                    if (existingUser.getGoogleId() != null && !existingUser.getGoogleId().equals(googleUserInfo.googleId())) {
+                        throw new DataConflictException("This email is already linked to a different Google account.");
+                    }
+
+                    if (!existingUser.isVerified()) {
+                        existingUser.setVerified(true);
+                    }
+
+                    existingUser.setGoogleId(googleUserInfo.googleId());
+                    if (existingUser.getPassword() == null) {
+                        existingUser.setAuthProvider(AuthProvider.GOOGLE);
+                    }
+
+                    return userRepository.save(existingUser);
+                })
+                .orElseGet(() -> {
+                    User newUser = new User();
+
+                    String safeName = googleUserInfo.name() != null ? googleUserInfo.name() : googleUserInfo.email().split("@")[0];
+
+                    newUser.setName(safeName);
+                    newUser.setEmail(googleUserInfo.email());
+                    newUser.setAuthProvider(AuthProvider.GOOGLE);
+                    newUser.setGoogleId(googleUserInfo.googleId());
+                    newUser.setVerified(true);
+                    newUser.setActive(true);
+                    newUser.setUnitValue(java.math.BigDecimal.TEN); // That needs to change in the future.
+
+                    return userRepository.save(newUser);
+                });
     }
 
     @Transactional(noRollbackFor = BusinessRuleException.class)
