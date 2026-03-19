@@ -20,10 +20,5 @@ public record SignUpRequest(
                 regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$",
                 message = "The password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
         )
-        String password,
-
-        @NotNull(message = "The unit value is required.")
-        @Positive(message = "The unit value must be positive.")
-        @Digits(integer = 15, fraction = 4, message = "The unit value must have a maximum of 15 integer digits and 4 fractional digits.")
-        BigDecimal unitValue
+        String password
 ) {}

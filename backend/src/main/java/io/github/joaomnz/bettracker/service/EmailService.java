@@ -19,27 +19,42 @@ public class EmailService {
     }
 
     @Async
-    public void sendVerificationEmail(String to, String name, String otp, boolean isNewUser) {
-        String subject = "BetTracker - Email Verification";
-
-        String greetingLine = isNewUser
-                ? "Welcome to BetTracker! Your email verification code is:"
-                : "Your email verification code is:";
+    public void sendWelcomeEmail(String to, String name) {
+        String subject = "Welcome to BetTracker!";
 
         String text = String.format(
                 """
                 Hi %s,
                 
-                %s
+                Welcome to BetTracker!
                 
-                %s
+                Your account is verified and ready to go.
+                
+                Best regards,
+                The BetTracker Team
+                """,
+                name
+        );
+
+        sendEmail(to, subject, text);
+    }
+
+    @Async
+    public void sendVerificationEmail(String to, String name, String otp) {
+        String subject = "BetTracker - Email Verification";
+
+        String text = String.format(
+                """
+                Hi %s,
+                
+                Your email verification code is: %s
                 
                 This code will expire in 24 hours. If you did not request this, please ignore this email.
                 
                 Best regards,
                 The BetTracker Team
                 """,
-                name, greetingLine, otp
+                name, otp
         );
 
         sendEmail(to, subject, text);

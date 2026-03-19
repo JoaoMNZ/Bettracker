@@ -2,18 +2,17 @@ CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
+    pending_email VARCHAR(255),
     password VARCHAR(255),
-    auth_provider VARCHAR(50) NOT NULL DEFAULT 'LOCAL',
     google_id VARCHAR(255) UNIQUE,
-    unit_value DECIMAL(19,4) NOT NULL,
+    failed_login_attempts INT NOT NULL DEFAULT 0,
+    lockout_end TIMESTAMP,
     user_type VARCHAR(50) NOT NULL DEFAULT 'FREE',
     active BOOLEAN NOT NULL DEFAULT TRUE,
     verified BOOLEAN NOT NULL DEFAULT FALSE,
+    unit_value DECIMAL(19,4),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP,
-    failed_login_attempts INT NOT NULL DEFAULT 0,
-    lockout_end TIMESTAMP,
-    pending_email VARCHAR(255)
+    updated_at TIMESTAMP
 );
 
 CREATE TABLE otp_tokens (

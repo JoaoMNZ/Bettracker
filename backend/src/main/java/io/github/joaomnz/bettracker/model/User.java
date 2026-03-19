@@ -1,6 +1,5 @@
 package io.github.joaomnz.bettracker.model;
 
-import io.github.joaomnz.bettracker.enums.AuthProvider;
 import io.github.joaomnz.bettracker.enums.UserType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -11,8 +10,10 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "users")
 @NoArgsConstructor
+@AllArgsConstructor
 @Getter @Setter
 @EqualsAndHashCode(of = "id")
+@Builder
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,43 +25,43 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(name = "pending_email")
+    private String pendingEmail;
+
     @Column
     private String password;
-
-    @Column(name = "auth_provider", nullable = false)
-    @Enumerated(EnumType.STRING)
-    private AuthProvider authProvider = AuthProvider.LOCAL;
 
     @Column(name = "google_id", unique = true)
     private String googleId;
 
-    @Column(nullable = false, name = "unit_value", precision = 19, scale = 4)
-    private BigDecimal unitValue;
-
-    @Column(nullable = false, name = "user_type")
-    @Enumerated(EnumType.STRING)
-    private UserType userType = UserType.FREE;
-
-    @Column(nullable = false)
-    private boolean active = true;
-
-    @Column(nullable = false)
-    private boolean verified = false;
-
-    @Column(nullable = false, updatable = false, name = "created_at")
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-
-    @Column(nullable = false, name = "failed_login_attempts")
+    @Column(name = "failed_login_attempts", nullable = false)
+    @Builder.Default
     private int failedLoginAttempts = 0;
 
     @Column(name = "lockout_end")
     private LocalDateTime lockoutEnd;
 
-    @Column(name = "pending_email")
-    private String pendingEmail;
+    @Column(name = "user_type", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private UserType userType = UserType.FREE;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean active = true;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean verified = false;
+
+    @Column(name = "unit_value", precision = 19, scale = 4)
+    private BigDecimal unitValue;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 
     @PrePersist
     public void prePersist(){
@@ -70,12 +71,5 @@ public class User {
     @PreUpdate
     public void preUpdate(){
         updatedAt = LocalDateTime.now();
-    }
-
-    public User(String name, String email, String password, BigDecimal unitValue) {
-        this.name = name;
-        this.email = email;
-        this.password = password;
-        this.unitValue = unitValue;
     }
 }
