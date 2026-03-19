@@ -4,7 +4,6 @@ import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.dto.user.ResetPasswordRequest;
 import io.github.joaomnz.bettracker.dto.user.UserResponse;
-import io.github.joaomnz.bettracker.enums.AuthProvider;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
@@ -14,12 +13,10 @@ import io.github.joaomnz.bettracker.repository.UserRepository;
 import io.github.joaomnz.bettracker.security.JwtService;
 import io.github.joaomnz.bettracker.security.UserDetailsImpl;
 import org.springframework.security.authentication.*;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.xml.crypto.Data;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -34,7 +31,16 @@ public class AuthService {
     private final EmailService emailService;
     private final GoogleAuthService googleAuthService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtService jwtService, RefreshTokenService refreshTokenService, OtpTokenService otpTokenService, EmailService emailService, GoogleAuthService googleAuthService) {
+    public AuthService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            AuthenticationManager authenticationManager,
+            JwtService jwtService,
+            RefreshTokenService refreshTokenService,
+            OtpTokenService otpTokenService,
+            EmailService emailService,
+            GoogleAuthService googleAuthService
+    ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
@@ -47,17 +53,18 @@ public class AuthService {
 
     @Transactional
     public AuthResponse signUp(SignUpRequest request){
-        if(userRepository.existsByEmail(request.email())){
+        String normalizedEmail = request.email().trim().toLowerCase();
+
+        if(userRepository.existsByEmail(normalizedEmail)){
             throw new DataConflictException("The email address is already registered.");
         }
 
         User savedUser = userRepository.save(
-                new User(
-                    request.name(),
-                    request.email(),
-                    passwordEncoder.encode(request.password()),
-                    request.unitValue()
-                )
+                User.builder()
+                        .name(request.name())
+                        .email(normalizedEmail)
+                        .password(passwordEncoder.encode(request.password()))
+                        .build()
         );
 
         String otp = otpTokenService.createOtp(
@@ -66,7 +73,7 @@ public class AuthService {
                 LocalDateTime.now().plusHours(24)
         );
 
-        emailService.sendVerificationEmail(savedUser.getEmail(), savedUser.getName(), otp, true);
+        emailService.sendVerificationEmail(savedUser.getEmail(), savedUser.getName(), otp);
 
         return new AuthResponse(
                 refreshTokenService.generateToken(savedUser),
@@ -77,7 +84,9 @@ public class AuthService {
 
     @Transactional(noRollbackFor = {BadCredentialsException.class, LockedException.class})
     public AuthResponse signIn(SignInRequest request){
-        User user = userRepository.findByEmail(request.email())
+        String normalizedEmail = request.email().trim().toLowerCase();
+
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new BusinessRuleException("Invalid credentials."));
 
         LocalDateTime now = LocalDateTime.now();
@@ -88,14 +97,12 @@ public class AuthService {
         }
 
         try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.email(), request.password())
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(normalizedEmail, request.password())
             );
 
             user.setFailedLoginAttempts(0);
             user.setLockoutEnd(null);
-
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
 
             return new AuthResponse(
                     refreshTokenService.generateToken(user),
@@ -114,26 +121,22 @@ public class AuthService {
             }
 
             throw exception;
-
-        } finally {
-            userRepository.save(user);
         }
     }
 
-    public AuthResponse authenticateWithGoogle(GoogleLoginRequest request){
-        GoogleUserInfo googleUserInfo = googleAuthService.verifyToken(request.token());
+    public AuthResponse authenticateWithGoogle(GoogleLoginRequest request) {
+        GoogleUserInfo googleInfo = googleAuthService.verifyToken(request.token());
 
-        return processTransactionalGoogleLogin(googleUserInfo);
-    }
-
-    @Transactional
-    protected AuthResponse processTransactionalGoogleLogin(GoogleUserInfo googleUserInfo) {
-        User user = userRepository.findByGoogleId(googleUserInfo.googleId())
-                .orElseGet(() -> handleGoogleMergeOrCreate(googleUserInfo));
+        User user = userRepository.findByGoogleId(googleInfo.googleId())
+                .orElseGet(() -> linkOrCreateUser(googleInfo));
 
         if (!user.isActive()) {
-            throw new DisabledException("Your account has been deactivated. Please contact support to reactivate it.");
+            throw new DisabledException("Your account is deactivated. Contact support.");
         }
+
+        user.setFailedLoginAttempts(0);
+        user.setLockoutEnd(null);
+        userRepository.save(user);
 
         return new AuthResponse(
                 refreshTokenService.generateToken(user),
@@ -142,36 +145,32 @@ public class AuthService {
         );
     }
 
-    private User handleGoogleMergeOrCreate(GoogleUserInfo googleUserInfo) {
-        return userRepository.findByEmail(googleUserInfo.email())
+    private User linkOrCreateUser(GoogleUserInfo googleInfo) {
+        String normalizedEmail = googleInfo.email().trim().toLowerCase();
+
+        return userRepository.findByEmail(normalizedEmail)
                 .map(existingUser -> {
-                    if (existingUser.getGoogleId() != null && !existingUser.getGoogleId().equals(googleUserInfo.googleId())) {
-                        throw new DataConflictException("This email is already linked to a different Google account.");
+                    if (existingUser.getGoogleId() != null && !existingUser.getGoogleId().equals(googleInfo.googleId())) {
+                        throw new DataConflictException("Email already linked to another Google identity.");
                     }
 
-                    if (!existingUser.isVerified()) {
+                    existingUser.setGoogleId(googleInfo.googleId());
+                    if(!existingUser.isVerified()){
                         existingUser.setVerified(true);
-                    }
-
-                    existingUser.setGoogleId(googleUserInfo.googleId());
-                    if (existingUser.getPassword() == null) {
-                        existingUser.setAuthProvider(AuthProvider.GOOGLE);
+                        emailService.sendWelcomeEmail(normalizedEmail, existingUser.getName());
                     }
 
                     return userRepository.save(existingUser);
                 })
                 .orElseGet(() -> {
-                    User newUser = new User();
+                    User newUser = User.builder()
+                            .name(googleInfo.name())
+                            .email(normalizedEmail)
+                            .googleId(googleInfo.googleId())
+                            .verified(true)
+                            .build();
 
-                    String safeName = googleUserInfo.name() != null ? googleUserInfo.name() : googleUserInfo.email().split("@")[0];
-
-                    newUser.setName(safeName);
-                    newUser.setEmail(googleUserInfo.email());
-                    newUser.setAuthProvider(AuthProvider.GOOGLE);
-                    newUser.setGoogleId(googleUserInfo.googleId());
-                    newUser.setVerified(true);
-                    newUser.setActive(true);
-                    newUser.setUnitValue(java.math.BigDecimal.TEN); // That needs to change in the future.
+                    emailService.sendWelcomeEmail(newUser.getEmail(), newUser.getName());
 
                     return userRepository.save(newUser);
                 });
@@ -181,12 +180,9 @@ public class AuthService {
     public AuthResponse refresh(RefreshTokenRequest request){
         User user = refreshTokenService.consumeToken(request.refreshToken());
 
-        String newRefreshToken = refreshTokenService.generateToken(user);
-        String newAccessToken = jwtService.generateToken(new UserDetailsImpl(user));
-
         return new AuthResponse(
-                newRefreshToken,
-                newAccessToken,
+                refreshTokenService.generateToken(user),
+                jwtService.generateToken(new UserDetailsImpl(user)),
                 UserResponse.fromEntity(user)
         );
     }
@@ -202,13 +198,14 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found."));
 
         if(user.isVerified()){
-            throw new DataConflictException("User is already verified.");
+            throw new BusinessRuleException("User is already verified.");
         }
 
         otpTokenService.verifyOtp(user, request.otp(), OtpPurpose.EMAIL_VERIFICATION);
 
         user.setVerified(true);
-        userRepository.save(user);
+
+        emailService.sendWelcomeEmail(user.getEmail(), user.getName());
     }
 
     @Transactional
@@ -217,7 +214,7 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found."));
 
         if(user.isVerified()){
-            throw new DataConflictException("User is already verified.");
+            throw new BusinessRuleException("User is already verified.");
         }
 
         String otp = otpTokenService.createOtp(
@@ -226,12 +223,14 @@ public class AuthService {
                 LocalDateTime.now().plusHours(24)
         );
 
-        emailService.sendVerificationEmail(user.getEmail(), user.getName(), otp, false);
+        emailService.sendVerificationEmail(user.getEmail(), user.getName(), otp);
     }
 
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request){
-        userRepository.findByEmail(request.email())
+        String normalizedEmail = request.email().trim().toLowerCase();
+
+        userRepository.findByEmail(normalizedEmail)
                 .ifPresent(user -> {
                     String otp = otpTokenService.createOtp(
                             user,
@@ -245,8 +244,10 @@ public class AuthService {
 
     @Transactional(noRollbackFor = BusinessRuleException.class)
     public void resetPassword(ResetPasswordRequest request){
+        String normalizedEmail = request.email().trim().toLowerCase();
+
         // Prevents email enumeration. By mimicking the error for a missing OTP, attackers cannot distinguish between an unregistered email and an inactive reset request.
-        User user = userRepository.findByEmail(request.email())
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("No verification code was requested."));
 
         otpTokenService.verifyOtp(user, request.otp(), OtpPurpose.PASSWORD_RESET);
@@ -256,7 +257,6 @@ public class AuthService {
         }
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
-        userRepository.save(user);
 
         emailService.sendPasswordChangeNotice(user.getEmail(), user.getName());
     }
