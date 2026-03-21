@@ -6,4 +6,4 @@ public record AuthResponse(
         String refreshToken,
         String accessToken,
         UserResponse user
-) {}
+){}

@@ -45,166 +45,81 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
-    @ExceptionHandler(DataConflictException.class)
-    public ResponseEntity<ErrorResponse> handleDataConflict(DataConflictException exception, HttpServletRequest request){
-        ErrorResponse response = new ErrorResponse(
-                Instant.now(),
-                HttpStatus.CONFLICT.value(),
-                HttpStatus.CONFLICT.getReasonPhrase(),
-                exception.getMessage(),
-                null,
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(HttpServletRequest request){
+        return buildResponse(HttpStatus.BAD_REQUEST, "Malformed JSON request or invalid data type.", request.getRequestURI());
     }
 
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<ErrorResponse> handleBusinessRule(BusinessRuleException exception, HttpServletRequest request){
-        ErrorResponse response = new ErrorResponse(
-                Instant.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                HttpStatus.BAD_REQUEST.getReasonPhrase(),
-                exception.getMessage(),
-                null,
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request.getRequestURI());
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFound(ResourceNotFoundException exception, HttpServletRequest request){
-        ErrorResponse response = new ErrorResponse(
-                Instant.now(),
-                HttpStatus.NOT_FOUND.value(),
-                HttpStatus.NOT_FOUND.getReasonPhrase(),
-                exception.getMessage(),
-                null,
-                request.getRequestURI()
-        );
+        return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request.getRequestURI());
+    }
 
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    @ExceptionHandler(DataConflictException.class)
+    public ResponseEntity<ErrorResponse> handleDataConflict(DataConflictException exception, HttpServletRequest request){
+        return buildResponse(HttpStatus.CONFLICT, exception.getMessage(), request.getRequestURI());
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentials(HttpServletRequest request){
+        String requestURI = request.getRequestURI();
+        log.warn("Failed login attempt for URI: {}", requestURI);
+        return buildResponse(HttpStatus.UNAUTHORIZED, "Invalid credentials.", requestURI);
+    }
+
+    @ExceptionHandler(LockedException.class)
+    public ResponseEntity<ErrorResponse> handleLocked(LockedException exception, HttpServletRequest request){
+        String requestURI = request.getRequestURI();
+        log.warn("Login attempt on locked account for URI: {}", requestURI);
+        return buildResponse(HttpStatus.UNAUTHORIZED, exception.getMessage(), requestURI);
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ErrorResponse> handleDisabled(HttpServletRequest request){
+        String requestURI = request.getRequestURI();
+        log.warn("Login attempt on deactivated account for URI: {}", requestURI);
+        return buildResponse(HttpStatus.FORBIDDEN, "Your account has been deactivated. Please contact support to reactivate it.", requestURI);
     }
 
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException exception, HttpServletRequest request) {
-        ErrorResponse response = new ErrorResponse(
-                Instant.now(),
-                HttpStatus.TOO_MANY_REQUESTS.value(),
-                HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase(),
-                exception.getMessage(),
-                null,
-                request.getRequestURI()
-        );
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
+        return buildResponse(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), request.getRequestURI());
     }
 
     @ExceptionHandler(ExternalServiceException.class)
     public ResponseEntity<ErrorResponse> handleExternalService(ExternalServiceException exception, HttpServletRequest request) {
-        log.error("External service failure: {} for URI: {}", exception.getMessage(), request.getRequestURI());
-
-        ErrorResponse response = new ErrorResponse(
-                Instant.now(),
-                HttpStatus.BAD_GATEWAY.value(),
-                HttpStatus.BAD_GATEWAY.getReasonPhrase(),
-                exception.getMessage(),
-                null,
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
-    }
-
-    @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException exception, HttpServletRequest request){
-        log.warn("Failed login attempt for URI: {}", request.getRequestURI());
-
-        ErrorResponse response = new ErrorResponse(
-                Instant.now(),
-                HttpStatus.UNAUTHORIZED.value(),
-                HttpStatus.UNAUTHORIZED.getReasonPhrase(),
-                "Invalid credentials.",
-                null,
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
-    }
-
-    @ExceptionHandler(DisabledException.class)
-    public ResponseEntity<ErrorResponse> handleDisabled(DisabledException exception, HttpServletRequest request){
-        log.warn("Login attempt on deactivated account for URI: {}", request.getRequestURI());
-
-        ErrorResponse response = new ErrorResponse(
-                Instant.now(),
-                HttpStatus.FORBIDDEN.value(),
-                HttpStatus.FORBIDDEN.getReasonPhrase(),
-                "Your account has been deactivated. Please contact support to reactivate it.",
-                null,
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
-    }
-
-
-    @ExceptionHandler(LockedException.class)
-    public ResponseEntity<ErrorResponse> handleLocked(LockedException exception, HttpServletRequest request){
-        log.warn("Login attempt on locked account for URI: {}", request.getRequestURI());
-
-        ErrorResponse response = new ErrorResponse(
-                Instant.now(),
-                HttpStatus.UNAUTHORIZED.value(),
-                HttpStatus.UNAUTHORIZED.getReasonPhrase(),
-                exception.getMessage(),
-                null,
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
-    }
-
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException exception, HttpServletRequest request){
-        ErrorResponse response = new ErrorResponse(
-                Instant.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                HttpStatus.BAD_REQUEST.getReasonPhrase(),
-                "Malformed JSON request or invalid data type.",
-                null,
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        String requestURI = request.getRequestURI();
+        log.error("External failure on {} {}", request.getMethod(), requestURI, exception);
+        return buildResponse(HttpStatus.BAD_GATEWAY, exception.getMessage(), requestURI);
     }
 
     @ExceptionHandler(JwtGenerationException.class)
     public ResponseEntity<ErrorResponse> handleJwtGeneration(JwtGenerationException exception, HttpServletRequest request) {
-        ErrorResponse response = new ErrorResponse(
-                Instant.now(),
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
-                exception.getMessage(),
-                null,
-                request.getRequestURI()
-        );
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request.getRequestURI());
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnhandledExceptions(Exception exception, HttpServletRequest request){
-        log.error("Unhandled exception caught for URI: {}", request.getRequestURI(), exception);
+        String requestURI = request.getRequestURI();
+        log.error("Unexpected failure on {} {}", request.getMethod(), requestURI, exception);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An internal error occurred.", requestURI);
+    }
 
+    private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String message, String requestURI){
         ErrorResponse response = new ErrorResponse(
                 Instant.now(),
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
-                "An internal error occurred.",
+                status.value(),
+                status.getReasonPhrase(),
+                message,
                 null,
-                request.getRequestURI()
+                requestURI
         );
 
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        return ResponseEntity.status(status).body(response);
     }
 }

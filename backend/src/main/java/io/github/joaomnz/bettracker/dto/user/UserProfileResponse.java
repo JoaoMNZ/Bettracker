@@ -15,7 +15,7 @@ public record UserProfileResponse(
         boolean verified,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
-) {
+){
     public static UserProfileResponse fromEntity(User user){
         return new UserProfileResponse(
                 user.getId(),

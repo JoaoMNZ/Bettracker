@@ -2,8 +2,6 @@ package io.github.joaomnz.bettracker.dto.auth;
 
 import jakarta.validation.constraints.*;
 
-import java.math.BigDecimal;
-
 public record SignUpRequest(
         @NotBlank(message = "The name is required.")
         @Size(max = 255, message = "The name must not be more than 255 characters.")
@@ -21,4 +19,4 @@ public record SignUpRequest(
                 message = "The password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
         )
         String password
-) {}
+){}

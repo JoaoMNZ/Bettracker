@@ -9,4 +9,4 @@ public record ForgotPasswordRequest(
         @Size(max = 255, message = "The email must not be more than 255 characters.")
         @Email(message = "Invalid email format.")
         String email
-) {}
+){}

@@ -12,7 +12,7 @@ public record UserResponse(
         BigDecimal unitValue,
         UserType userType,
         boolean verified
-) {
+){
     public static UserResponse fromEntity(User user){
         return new UserResponse(
                 user.getId(),

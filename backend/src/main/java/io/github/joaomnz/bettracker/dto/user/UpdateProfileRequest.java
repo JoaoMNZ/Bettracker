@@ -13,7 +13,7 @@ public record UpdateProfileRequest(
         @Positive(message = "The unit value must be positive.")
         @Digits(integer = 15, fraction = 4, message = "The unit value must have a maximum of 15 integer digits and 4 fractional digits.")
         BigDecimal unitValue
-) {
+){
         @JsonIgnore
         @AssertTrue(message = "You must provide at least a name or a unit value to update.")
         public boolean isValidUpdate() {
