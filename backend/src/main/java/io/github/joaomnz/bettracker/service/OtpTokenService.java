@@ -70,16 +70,13 @@ public class OtpTokenService {
 
             if(attempts >= 3){
                 latest.setExpiresAt(now);
-                otpTokenRepository.save(latest);
                 throw new BusinessRuleException("Too many failed attempts. This code has been invalidated. Please request a new one.");
             }
 
-            otpTokenRepository.save(latest);
             throw new BusinessRuleException("Invalid verification code. You have " + (3 - attempts) + " attempt(s) left.");
         }
 
         latest.setUsedAt(now);
-        otpTokenRepository.save(latest);
     }
 
     private String generateSixDigitCode(){

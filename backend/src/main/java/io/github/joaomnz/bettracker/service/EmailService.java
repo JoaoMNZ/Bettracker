@@ -3,11 +3,8 @@ package io.github.joaomnz.bettracker.service;
 import io.github.joaomnz.bettracker.annotation.AsyncRetryableEmail;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.retry.annotation.Recover;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -115,11 +112,6 @@ public class EmailService {
 
         javaMailSender.send(message);
         log.info("Email sent successfully to {}", to);
-    }
-
-    @Recover
-    public void recoverEmailFailure(MailException exception, String to) {
-        log.error("Failed to send email to {}: {}", to, exception.getMessage(), exception);
     }
 
     private String buildEmailBody(String name, String content) {
