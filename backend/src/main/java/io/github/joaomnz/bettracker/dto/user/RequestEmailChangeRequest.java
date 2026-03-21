@@ -12,4 +12,4 @@ public record RequestEmailChangeRequest(
 
         @NotBlank(message = "Current password is required.")
         String currentPassword
-) {}
+){}

@@ -20,7 +20,6 @@ public class UserController {
     @GetMapping("/me")
     public ResponseEntity<UserProfileResponse> getProfile(@AuthenticationPrincipal UserDetailsImpl userDetails){
         UserProfileResponse response = userService.getProfile(userDetails.getUser().getId());
-
         return ResponseEntity.ok(response);
     }
 
@@ -30,7 +29,6 @@ public class UserController {
             @Valid @RequestBody UpdateProfileRequest request
     ){
         UserProfileResponse response = userService.updateProfile(userDetails.getUser().getId(), request);
-
         return ResponseEntity.ok(response);
     }
 
@@ -40,7 +38,6 @@ public class UserController {
             @Valid @RequestBody UpdatePasswordRequest request
     ){
         userService.updatePassword(userDetails.getUser().getId(), request);
-
         return ResponseEntity.noContent().build();
     }
 
@@ -50,7 +47,6 @@ public class UserController {
             @Valid @RequestBody RequestEmailChangeRequest request
     ){
         userService.requestEmailChange(userDetails.getUser().getId(), request);
-
         return ResponseEntity.noContent().build();
     }
 
@@ -60,7 +56,6 @@ public class UserController {
             @Valid @RequestBody VerifyEmailChangeRequest request
     ){
         userService.verifyEmailChange(userDetails.getUser().getId(), request);
-
         return ResponseEntity.noContent().build();
     }
 
@@ -70,7 +65,6 @@ public class UserController {
             @Valid @RequestBody DeactivateAccountRequest request
     ){
         userService.deactivateAccount(userDetails.getUser().getId(), request);
-
         return ResponseEntity.noContent().build();
     }
 }

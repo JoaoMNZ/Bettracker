@@ -10,8 +10,9 @@ import io.github.joaomnz.bettracker.exception.DataConflictException;
 import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
-import io.github.joaomnz.bettracker.security.JwtService;
+import io.github.joaomnz.bettracker.security.JwtProvider;
 import io.github.joaomnz.bettracker.security.UserDetailsImpl;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,35 +22,16 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 @Service
+@RequiredArgsConstructor
 public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
-    private final JwtService jwtService;
+    private final JwtProvider jwtProvider;
     private final RefreshTokenService refreshTokenService;
     private final OtpTokenService otpTokenService;
     private final EmailService emailService;
     private final GoogleAuthService googleAuthService;
-
-    public AuthService(
-            UserRepository userRepository,
-            PasswordEncoder passwordEncoder,
-            AuthenticationManager authenticationManager,
-            JwtService jwtService,
-            RefreshTokenService refreshTokenService,
-            OtpTokenService otpTokenService,
-            EmailService emailService,
-            GoogleAuthService googleAuthService
-    ) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.authenticationManager = authenticationManager;
-        this.jwtService = jwtService;
-        this.refreshTokenService = refreshTokenService;
-        this.otpTokenService = otpTokenService;
-        this.emailService = emailService;
-        this.googleAuthService = googleAuthService;
-    }
 
     @Transactional
     public AuthResponse signUp(SignUpRequest request){
@@ -75,11 +57,7 @@ public class AuthService {
 
         emailService.sendVerificationEmail(savedUser.getEmail(), savedUser.getName(), otp);
 
-        return new AuthResponse(
-                refreshTokenService.generateToken(savedUser),
-                jwtService.generateToken(new UserDetailsImpl(savedUser)),
-                UserResponse.fromEntity(savedUser)
-        );
+        return buildAuthResponse(savedUser);
     }
 
     @Transactional(noRollbackFor = {BadCredentialsException.class, LockedException.class})
@@ -97,18 +75,11 @@ public class AuthService {
         }
 
         try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(normalizedEmail, request.password())
-            );
-
+            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(normalizedEmail, request.password()));
             user.setFailedLoginAttempts(0);
             user.setLockoutEnd(null);
 
-            return new AuthResponse(
-                    refreshTokenService.generateToken(user),
-                    jwtService.generateToken(new UserDetailsImpl(user)),
-                    UserResponse.fromEntity(user)
-            );
+            return buildAuthResponse(user);
 
         } catch(BadCredentialsException exception) {
             int attempts = user.getFailedLoginAttempts() + 1;
@@ -119,7 +90,6 @@ public class AuthService {
                 user.setFailedLoginAttempts(0);
                 throw new LockedException("Account locked due to too many failed attempts. Please try again in 15 minutes.");
             }
-
             throw exception;
         }
     }
@@ -138,58 +108,53 @@ public class AuthService {
         user.setLockoutEnd(null);
         userRepository.save(user);
 
-        return new AuthResponse(
-                refreshTokenService.generateToken(user),
-                jwtService.generateToken(new UserDetailsImpl(user)),
-                UserResponse.fromEntity(user)
-        );
-    }
-
-    private User linkOrCreateUser(GoogleUserInfo googleInfo) {
-        String normalizedEmail = googleInfo.email().trim().toLowerCase();
-
-        return userRepository.findByEmail(normalizedEmail)
-                .map(existingUser -> {
-                    if (existingUser.getGoogleId() != null && !existingUser.getGoogleId().equals(googleInfo.googleId())) {
-                        throw new DataConflictException("Email already linked to another Google identity.");
-                    }
-
-                    existingUser.setGoogleId(googleInfo.googleId());
-                    if(!existingUser.isVerified()){
-                        existingUser.setVerified(true);
-                        emailService.sendWelcomeEmail(normalizedEmail, existingUser.getName());
-                    }
-
-                    return userRepository.save(existingUser);
-                })
-                .orElseGet(() -> {
-                    User newUser = User.builder()
-                            .name(googleInfo.name())
-                            .email(normalizedEmail)
-                            .googleId(googleInfo.googleId())
-                            .verified(true)
-                            .build();
-
-                    emailService.sendWelcomeEmail(newUser.getEmail(), newUser.getName());
-
-                    return userRepository.save(newUser);
-                });
+        return buildAuthResponse(user);
     }
 
     @Transactional(noRollbackFor = BusinessRuleException.class)
     public AuthResponse refresh(RefreshTokenRequest request){
         User user = refreshTokenService.consumeToken(request.refreshToken());
-
-        return new AuthResponse(
-                refreshTokenService.generateToken(user),
-                jwtService.generateToken(new UserDetailsImpl(user)),
-                UserResponse.fromEntity(user)
-        );
+        return buildAuthResponse(user);
     }
 
     @Transactional
     public void logout(LogoutRequest request){
         refreshTokenService.revokeToken(request.refreshToken());
+    }
+
+    @Transactional
+    public void forgotPassword(ForgotPasswordRequest request){
+        String normalizedEmail = request.email().trim().toLowerCase();
+
+        userRepository.findByEmail(normalizedEmail)
+                .ifPresent(user -> {
+                    String otp = otpTokenService.createOtp(
+                            user,
+                            OtpPurpose.PASSWORD_RESET,
+                            LocalDateTime.now().plusMinutes(15)
+                    );
+
+                    emailService.sendPasswordResetEmail(user.getEmail(), user.getName(), otp);
+                });
+    }
+
+    @Transactional(noRollbackFor = BusinessRuleException.class)
+    public void resetPassword(ResetPasswordRequest request){
+        String normalizedEmail = request.email().trim().toLowerCase();
+
+        // Prevents email enumeration. By mimicking the error for a missing OTP, attackers cannot distinguish between an unregistered email and an inactive reset request.
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("No verification code was requested."));
+
+        otpTokenService.verifyOtp(user, request.otp(), OtpPurpose.PASSWORD_RESET);
+
+        if (passwordEncoder.matches(request.newPassword(), user.getPassword())) {
+            throw new BusinessRuleException("New password cannot be the same as your current password.");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+
+        emailService.sendPasswordChangeNotice(user.getEmail(), user.getName());
     }
 
     @Transactional(noRollbackFor = BusinessRuleException.class)
@@ -226,38 +191,42 @@ public class AuthService {
         emailService.sendVerificationEmail(user.getEmail(), user.getName(), otp);
     }
 
-    @Transactional
-    public void forgotPassword(ForgotPasswordRequest request){
-        String normalizedEmail = request.email().trim().toLowerCase();
+    private User linkOrCreateUser(GoogleUserInfo googleInfo) {
+        String normalizedEmail = googleInfo.email().trim().toLowerCase();
 
-        userRepository.findByEmail(normalizedEmail)
-                .ifPresent(user -> {
-                    String otp = otpTokenService.createOtp(
-                            user,
-                            OtpPurpose.PASSWORD_RESET,
-                            LocalDateTime.now().plusMinutes(15)
-                    );
+        return userRepository.findByEmail(normalizedEmail)
+                .map(existingUser -> {
+                    if (existingUser.getGoogleId() != null && !existingUser.getGoogleId().equals(googleInfo.googleId())) {
+                        throw new DataConflictException("Email already linked to another Google identity.");
+                    }
 
-                    emailService.sendPasswordResetEmail(user.getEmail(), user.getName(), otp);
+                    existingUser.setGoogleId(googleInfo.googleId());
+                    if(!existingUser.isVerified()){
+                        existingUser.setVerified(true);
+                        emailService.sendWelcomeEmail(normalizedEmail, existingUser.getName());
+                    }
+
+                    return userRepository.save(existingUser);
+                })
+                .orElseGet(() -> {
+                    User newUser = User.builder()
+                            .name(googleInfo.name())
+                            .email(normalizedEmail)
+                            .googleId(googleInfo.googleId())
+                            .verified(true)
+                            .build();
+
+                    emailService.sendWelcomeEmail(newUser.getEmail(), newUser.getName());
+
+                    return userRepository.save(newUser);
                 });
     }
 
-    @Transactional(noRollbackFor = BusinessRuleException.class)
-    public void resetPassword(ResetPasswordRequest request){
-        String normalizedEmail = request.email().trim().toLowerCase();
-
-        // Prevents email enumeration. By mimicking the error for a missing OTP, attackers cannot distinguish between an unregistered email and an inactive reset request.
-        User user = userRepository.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("No verification code was requested."));
-
-        otpTokenService.verifyOtp(user, request.otp(), OtpPurpose.PASSWORD_RESET);
-
-        if (passwordEncoder.matches(request.newPassword(), user.getPassword())) {
-            throw new BusinessRuleException("New password cannot be the same as your current password.");
-        }
-
-        user.setPassword(passwordEncoder.encode(request.newPassword()));
-
-        emailService.sendPasswordChangeNotice(user.getEmail(), user.getName());
+    private AuthResponse buildAuthResponse(User user) {
+        return new AuthResponse(
+                refreshTokenService.generateToken(user),
+                jwtProvider.generateToken(new UserDetailsImpl(user)),
+                UserResponse.fromEntity(user)
+        );
     }
 }

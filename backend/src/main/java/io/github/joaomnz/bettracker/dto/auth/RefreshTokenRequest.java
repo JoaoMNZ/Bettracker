@@ -7,4 +7,4 @@ public record RefreshTokenRequest(
         @NotBlank(message = "Refresh token is required.")
         @Size(min = 43, max = 43, message = "Invalid token format.")
         String refreshToken
-) {}
+){}

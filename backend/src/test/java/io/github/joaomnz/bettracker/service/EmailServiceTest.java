@@ -70,7 +70,7 @@ public class EmailServiceTest {
         doThrow(new RuntimeException("Mail server is down!"))
                 .when(javaMailSender).send(any(SimpleMailMessage.class));
 
-        assertThatCode(() -> emailService.sendVerificationEmail(TARGET_EMAIL, TARGET_NAME, OTP, false))
+        assertThatCode(() -> emailService.sendVerificationEmail(TARGET_EMAIL, TARGET_NAME, OTP))
                 .doesNotThrowAnyException();
     }
 }

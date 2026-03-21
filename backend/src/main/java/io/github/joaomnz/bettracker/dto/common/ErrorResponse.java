@@ -15,6 +15,5 @@ public record ErrorResponse(
         // This hides the field from the JSON if it's null or empty
         @JsonInclude(JsonInclude.Include.NON_EMPTY)
         Map<String, List<String>> validationErrors,
-
         String path
-) {}
+){}

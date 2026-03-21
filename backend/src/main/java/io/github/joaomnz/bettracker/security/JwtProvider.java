@@ -8,18 +8,18 @@ import io.github.joaomnz.bettracker.exception.JwtGenerationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
-@Service
-public class JwtService {
+@Component
+public class JwtProvider {
     private final String issuer;
     private final Algorithm algorithm;
 
-    public JwtService(@Value("${api.security.token.secret}") String secret, @Value("${api.security.token.issuer}") String issuer) {
+    public JwtProvider(@Value("${api.security.token.secret}") String secret, @Value("${api.security.token.issuer}") String issuer) {
         this.issuer = issuer;
         this.algorithm = Algorithm.HMAC256(secret);
     }

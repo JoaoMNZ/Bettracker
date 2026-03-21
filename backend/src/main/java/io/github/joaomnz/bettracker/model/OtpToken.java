@@ -24,23 +24,23 @@ public class OtpToken {
     private User user;
 
     @Column(nullable = false)
-    private String code;
-
-    @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private OtpPurpose purpose;
 
-    @Column(nullable = false, name = "created_at")
+    @Column(nullable = false)
+    private String code;
+
+    @Column(name = "failed_attempts", nullable = false)
+    private int failedAttempts = 0;
+
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(nullable = false, name = "expires_at")
+    @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
     @Column(name = "used_at")
     private LocalDateTime usedAt;
-
-    @Column(nullable = false, name = "failed_attempts")
-    private int failedAttempts = 0;
 
     @PrePersist
     void prePersist(){

@@ -12,13 +12,13 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class JwtServiceTest {
-    private JwtService jwtService;
+public class JwtProviderTest {
+    private JwtProvider jwtProvider;
     private UserDetails testUser;
 
     @BeforeEach
     public void setUp() {
-        jwtService = new JwtService("test-secret-key", "test-issuer");
+        jwtProvider = new JwtProvider("test-secret-key", "test-issuer");
         List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_FREE"));
         testUser = new User("test@hotmail.com", "Pass123!", authorities);
     }
@@ -26,7 +26,7 @@ public class JwtServiceTest {
     @Test
     @DisplayName("Should generate a valid JWT.")
     void shouldGenerateSuccessfully(){
-        String token = jwtService.generateToken(testUser);
+        String token = jwtProvider.generateToken(testUser);
         assertThat(token).isNotNull();
         assertThat(token).isNotBlank();
         assertThat(token.split("\\.")).hasSize(3);
@@ -35,8 +35,8 @@ public class JwtServiceTest {
     @Test
     @DisplayName("Should extract the subject (email) from a valid JWT.")
     void shouldExtractSubjectFromValidToken(){
-        String token = jwtService.generateToken(testUser);
-        String subject = jwtService.extractSubject(token);
+        String token = jwtProvider.generateToken(testUser);
+        String subject = jwtProvider.extractSubject(token);
 
         assertThat(subject).isNotNull();
         assertThat(subject).isEqualTo(testUser.getUsername());
@@ -46,7 +46,7 @@ public class JwtServiceTest {
     @DisplayName("Should return null when JWT is invalid.")
     void shouldReturnNullWhenTokenIsInvalid(){
         String token = "eyJhbGciOiJIUzI1NiIsInR5cCI.invalidpayload.invalidsignature";
-        String subject = jwtService.extractSubject(token);
+        String subject = jwtProvider.extractSubject(token);
 
         assertThat(subject).isNull();
     }

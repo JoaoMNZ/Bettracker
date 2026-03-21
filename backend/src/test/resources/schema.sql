@@ -18,12 +18,12 @@ CREATE TABLE users (
 CREATE TABLE otp_tokens(
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
-    code VARCHAR(255) NOT NULL,
     purpose VARCHAR(50) NOT NULL,
+    code VARCHAR(255) NOT NULL,
+    failed_attempts INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP NOT NULL ,
     used_at TIMESTAMP,
-    failed_attempts INT NOT NULL DEFAULT 0,
 
     CONSTRAINT fk_users_otp_tokens FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -32,9 +32,9 @@ CREATE TABLE refresh_tokens (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     token VARCHAR(255) NOT NULL UNIQUE,
-    expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
 
     CONSTRAINT fk_users_refresh_tokens FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
