@@ -2,7 +2,7 @@ package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
-import io.github.joaomnz.bettracker.dto.user.ResetPasswordRequest;
+import io.github.joaomnz.bettracker.dto.auth.ResetPasswordRequest;
 import io.github.joaomnz.bettracker.dto.user.UserResponse;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
@@ -55,7 +55,7 @@ public class AuthService {
                 LocalDateTime.now().plusHours(24)
         );
 
-        emailService.sendVerificationEmail(savedUser.getEmail(), savedUser.getName(), otp);
+        emailService.sendEmailVerificationCode(savedUser.getEmail(), savedUser.getName(), otp);
 
         return buildAuthResponse(savedUser);
     }
@@ -66,6 +66,10 @@ public class AuthService {
 
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new BusinessRuleException("Invalid credentials."));
+
+        if(user.getPassword() == null){
+            throw new BusinessRuleException("Invalid Credentials.");
+        }
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -134,7 +138,7 @@ public class AuthService {
                             LocalDateTime.now().plusMinutes(15)
                     );
 
-                    emailService.sendPasswordResetEmail(user.getEmail(), user.getName(), otp);
+                    emailService.sendPasswordResetCode(user.getEmail(), user.getName(), otp);
                 });
     }
 
@@ -148,13 +152,13 @@ public class AuthService {
 
         otpTokenService.verifyOtp(user, request.otp(), OtpPurpose.PASSWORD_RESET);
 
-        if (passwordEncoder.matches(request.newPassword(), user.getPassword())) {
+        if (user.getPassword() != null && passwordEncoder.matches(request.newPassword(), user.getPassword())) {
             throw new BusinessRuleException("New password cannot be the same as your current password.");
         }
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
 
-        emailService.sendPasswordChangeNotice(user.getEmail(), user.getName());
+        emailService.notifyPasswordChange(user.getEmail(), user.getName());
     }
 
     @Transactional(noRollbackFor = BusinessRuleException.class)
@@ -170,7 +174,7 @@ public class AuthService {
 
         user.setVerified(true);
 
-        emailService.sendWelcomeEmail(user.getEmail(), user.getName());
+        emailService.sendWelcome(user.getEmail(), user.getName());
     }
 
     @Transactional
@@ -188,7 +192,7 @@ public class AuthService {
                 LocalDateTime.now().plusHours(24)
         );
 
-        emailService.sendVerificationEmail(user.getEmail(), user.getName(), otp);
+        emailService.sendEmailVerificationCode(user.getEmail(), user.getName(), otp);
     }
 
     private User linkOrCreateUser(GoogleUserInfo googleInfo) {
@@ -203,7 +207,7 @@ public class AuthService {
                     existingUser.setGoogleId(googleInfo.googleId());
                     if(!existingUser.isVerified()){
                         existingUser.setVerified(true);
-                        emailService.sendWelcomeEmail(normalizedEmail, existingUser.getName());
+                        emailService.sendWelcome(normalizedEmail, existingUser.getName());
                     }
 
                     return userRepository.save(existingUser);
@@ -216,7 +220,7 @@ public class AuthService {
                             .verified(true)
                             .build();
 
-                    emailService.sendWelcomeEmail(newUser.getEmail(), newUser.getName());
+                    emailService.sendWelcome(newUser.getEmail(), newUser.getName());
 
                     return userRepository.save(newUser);
                 });

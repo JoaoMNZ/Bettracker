@@ -10,6 +10,6 @@ public record RequestEmailChangeRequest(
         @Email(message = "Invalid email format.")
         String newEmail,
 
-        @NotBlank(message = "Current password is required.")
+        @Size(max = 255, message = "The password must not be more than 255 characters.")
         String currentPassword
 ){}

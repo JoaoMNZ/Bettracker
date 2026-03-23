@@ -19,7 +19,7 @@ public class EmailService {
     }
 
     @AsyncRetryableEmail
-    public void sendWelcomeEmail(String to, String name) {
+    public void sendWelcome(String to, String name) {
         String content = """
         Welcome to BetTracker!
         
@@ -30,7 +30,7 @@ public class EmailService {
     }
 
     @AsyncRetryableEmail
-    public void sendVerificationEmail(String to, String name, String otp) {
+    public void sendEmailVerificationCode(String to, String name, String otp) {
         String content = String.format(
                 """
                 Your email verification code is: %s
@@ -44,7 +44,7 @@ public class EmailService {
     }
 
     @AsyncRetryableEmail
-    public void sendPasswordResetEmail(String to, String name, String otp) {
+    public void sendPasswordResetCode(String to, String name, String otp) {
         String content = String.format(
                 """
                 Your password reset code is: %s
@@ -58,7 +58,7 @@ public class EmailService {
     }
 
     @AsyncRetryableEmail
-    public void sendPasswordChangeNotice(String to, String name) {
+    public void notifyPasswordChange(String to, String name) {
         String content = """
         Your password has been successfully changed
         
@@ -69,7 +69,7 @@ public class EmailService {
     }
 
     @AsyncRetryableEmail
-    public void sendEmailChangeVerificationEmail(String to, String name, String otp) {
+    public void sendEmailChangeCode(String to, String name, String otp) {
         String content = String.format(
                 """
                 Your verification code to change your email is: %s
@@ -83,7 +83,7 @@ public class EmailService {
     }
 
     @AsyncRetryableEmail
-    public void sendEmailChangeNotice(String oldEmail, String name) {
+    public void notifyEmailChange(String oldEmail, String name) {
         String content = """
         Your account email address has been changed.
         
@@ -93,7 +93,18 @@ public class EmailService {
     }
 
     @AsyncRetryableEmail
-    public void sendDeactivationEmail(String to, String name){
+    public void notifyPasswordSet(String to, String name) {
+        String content = """
+        You have successfully set up a password for your BetTracker account.
+        
+        If you did not request this, please contact support immediately.
+        """;
+
+        sendEmail(to, "BetTracker - Password Set", buildEmailBody(name, content));
+    }
+
+    @AsyncRetryableEmail
+    public void notifyAccountDeactivation(String to, String name){
         String content = """
         Your account has been successfully deactivated.
         

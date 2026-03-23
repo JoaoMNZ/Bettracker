@@ -41,6 +41,15 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/me/password")
+    public ResponseEntity<Void> setPassword(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @Valid @RequestBody SetPasswordRequest request
+    ){
+        userService.setPassword(userDetails.getUser().getId(), request);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/me/email/request-change")
     public ResponseEntity<Void> requestEmailChange(
             @AuthenticationPrincipal UserDetailsImpl userDetails,

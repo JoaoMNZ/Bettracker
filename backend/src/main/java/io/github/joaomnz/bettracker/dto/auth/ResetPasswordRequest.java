@@ -1,15 +1,21 @@
-package io.github.joaomnz.bettracker.dto.user;
+package io.github.joaomnz.bettracker.dto.auth;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-public record UpdatePasswordRequest(
-        @NotBlank(message = "Current password is required.")
-        @Size(max = 255, message = "The password must not be more than 255 characters.")
-        String oldPassword,
+public record ResetPasswordRequest(
+        @NotBlank(message = "The email is required.")
+        @Size(max = 255, message = "The email must not be more than 255 characters.")
+        @Email(message = "Invalid email format.")
+        String email,
 
-        @NotBlank(message = "The password is required.")
+        @NotBlank(message = "OTP is required")
+        @Size(min = 6, max = 6, message = "OTP must be exactly 6 digits")
+        String otp,
+
+        @NotBlank(message = "The new password is required.")
         @Size(max = 255, message = "The password must not be more than 255 characters.")
         @Pattern(
                 regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$",
