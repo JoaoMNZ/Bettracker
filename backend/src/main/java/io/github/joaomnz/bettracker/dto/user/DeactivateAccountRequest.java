@@ -1,8 +1,8 @@
 package io.github.joaomnz.bettracker.dto.user;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 public record DeactivateAccountRequest(
-        @NotBlank(message = "Password is required to deactivate your account.")
+        @Size(max = 255, message = "The password must not be more than 255 characters.")
         String password
 ){}

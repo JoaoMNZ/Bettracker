@@ -3,7 +3,7 @@ package io.github.joaomnz.bettracker.controller;
 import io.github.joaomnz.bettracker.IntegrationTest;
 import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
-import io.github.joaomnz.bettracker.dto.user.ResetPasswordRequest;
+import io.github.joaomnz.bettracker.dto.auth.ResetPasswordRequest;
 import io.github.joaomnz.bettracker.enums.UserType;
 import io.github.joaomnz.bettracker.factory.OtpTokenFactory;
 import io.github.joaomnz.bettracker.factory.RefreshTokenFactory;

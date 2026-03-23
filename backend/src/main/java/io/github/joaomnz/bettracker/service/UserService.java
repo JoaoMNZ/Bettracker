@@ -42,6 +42,10 @@ public class UserService {
     public void updatePassword(Long userId, UpdatePasswordRequest request){
         User user = getUserById(userId);
 
+        if(user.getPassword() == null){
+            throw new BusinessRuleException("This account does not have a password.");
+        }
+
         if(!passwordEncoder.matches(request.oldPassword(), user.getPassword())){
             throw new BusinessRuleException("Incorrect current password.");
         }
@@ -51,20 +55,34 @@ public class UserService {
         }
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
-        emailService.sendPasswordChangeNotice(user.getEmail(), user.getName());
+        emailService.notifyPasswordChange(user.getEmail(), user.getName());
+    }
+
+    @Transactional
+    public void setPassword(Long userId, SetPasswordRequest request){
+        User user = getUserById(userId);
+
+        if(user.getPassword() != null){
+            throw new BusinessRuleException("You already have a password.");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.password()));
+        emailService.notifyPasswordSet(user.getEmail(), user.getName());
     }
 
     @Transactional
     public void requestEmailChange(Long userId, RequestEmailChangeRequest request){
         User user = getUserById(userId);
 
-        if(!passwordEncoder.matches(request.currentPassword(), user.getPassword())){
-            throw new BusinessRuleException("Incorrect current password.");
+        if (user.getPassword() != null) {
+            if (request.currentPassword() == null ||!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+                throw new BusinessRuleException("Incorrect password.");
+            }
         }
 
         String normalizedNewEmail = request.newEmail().trim().toLowerCase();
 
-        if(request.newEmail().equals(normalizedNewEmail)){
+        if(user.getEmail().equals(normalizedNewEmail)){
             throw new BusinessRuleException("The new email must be different from your current one.");
         }
 
@@ -75,7 +93,7 @@ public class UserService {
         user.setPendingEmail(normalizedNewEmail);
 
         String otp = otpTokenService.createOtp(user, OtpPurpose.EMAIL_CHANGE, LocalDateTime.now().plusMinutes(15));
-        emailService.sendEmailChangeVerificationEmail(normalizedNewEmail, user.getName(), otp);
+        emailService.sendEmailChangeCode(normalizedNewEmail, user.getName(), otp);
     }
 
     @Transactional(noRollbackFor = BusinessRuleException.class)
@@ -93,7 +111,7 @@ public class UserService {
         user.setPendingEmail(null);
         user.setVerified(true);
 
-        emailService.sendEmailChangeNotice(oldEmail, user.getName());
+        emailService.notifyEmailChange(oldEmail, user.getName());
     }
 
     @Transactional
@@ -104,12 +122,14 @@ public class UserService {
             throw new BusinessRuleException("Account is already deactivated.");
         }
 
-        if(!passwordEncoder.matches(request.password(), user.getPassword())){
-            throw new BusinessRuleException("Incorrect password.");
+        if (user.getPassword() != null) {
+            if (request.password() == null || !passwordEncoder.matches(request.password(), user.getPassword())) {
+                throw new BusinessRuleException("Incorrect password.");
+            }
         }
 
         user.setActive(false);
-        emailService.sendDeactivationEmail(user.getEmail(), user.getName());
+        emailService.notifyAccountDeactivation(user.getEmail(), user.getName());
     }
 
     private User getUserById(Long userId) {
