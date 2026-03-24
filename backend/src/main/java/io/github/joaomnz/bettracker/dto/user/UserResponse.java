@@ -11,8 +11,9 @@ public record UserResponse(
         String email,
         BigDecimal unitValue,
         UserType userType,
-        boolean verified
-){
+        boolean verified,
+        boolean passwordEnabled,
+        boolean googleLinked){
     public static UserResponse fromEntity(User user){
         return new UserResponse(
                 user.getId(),
@@ -20,7 +21,9 @@ public record UserResponse(
                 user.getEmail(),
                 user.getUnitValue(),
                 user.getUserType(),
-                user.isVerified()
+                user.isVerified(),
+                user.getPassword() != null,
+                user.getGoogleId() != null
         );
     }
 }
