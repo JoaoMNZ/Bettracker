@@ -47,6 +47,7 @@ public class OtpTokenServiceTest {
     @Test
     @DisplayName("Should generate, hash, and save a 6-digit OTP when no recent token exists.")
     void shouldCreateOtpSuccessfullyWhenNoRecentTokenExists(){
+        when
         when(otpTokenRepository.findTopByUserAndPurposeOrderByCreatedAtDesc(testUser, OtpPurpose.EMAIL_VERIFICATION))
                 .thenReturn(Optional.empty());
 
