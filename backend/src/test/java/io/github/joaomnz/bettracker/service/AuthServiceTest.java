@@ -15,18 +15,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
+import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.LockedException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,6 +39,7 @@ public class AuthServiceTest {
     @Mock private RefreshTokenService refreshTokenService;
     @Mock private OtpTokenService otpTokenService;
     @Mock private EmailService emailService;
+    @Spy private Clock clock = Clock.fixed(Instant.parse("2026-03-26T10:00:00Z"), ZoneOffset.UTC);
 
     @InjectMocks
     private AuthService authService;
@@ -116,6 +114,7 @@ public class AuthServiceTest {
 
             User mockUser = new UserTestDataBuilder()
                     .withEmail(expectedNormalizedEmail)
+                    .withPassword(password)
                     .withFailedLoginAttempts(3)
                     .build();
 
@@ -171,16 +170,58 @@ public class AuthServiceTest {
             SignInRequest request = new SignInRequest("test@email.com", "Pass123!");
 
             User mockUser = new UserTestDataBuilder()
-                    .withLockoutEnd(LocalDateTime.now().plusMinutes(15))
+                    .withLockoutEnd(LocalDateTime.now(clock).plusMinutes(15))
                     .build();
 
             when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
 
             assertThatThrownBy(() -> authService.signIn(request))
                     .isInstanceOf(LockedException.class)
-                    .hasMessageContaining("Account is locked due to too many failed attempts.");
+                    .hasMessageContaining("Account is locked due to too many failed attempts. Please try again in 15 minute(s).");
 
             verifyNoInteractions(authenticationManager, refreshTokenService, jwtProvider);
+        }
+
+        @Test
+        void shouldAllowLoginAndResetAttemptsWhenLockoutHasExpired() {
+            String email = "test@email.com";
+            String password = "Pass123!";
+            SignInRequest request = new SignInRequest(email, password);
+
+            User mockUser = new UserTestDataBuilder()
+                    .withEmail(email)
+                    .withPassword(password)
+                    .withFailedLoginAttempts(3)
+                    .withLockoutEnd(LocalDateTime.now(clock).minusMinutes(1))
+                    .build();
+
+            when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
+            when(refreshTokenService.generateToken(mockUser)).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(any(UserDetailsImpl.class))).thenReturn("mock-jwt");
+
+            AuthResponse response = authService.signIn(request);
+
+            assertThat(response).isNotNull();
+
+            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
+            assertThat(mockUser.getLockoutEnd()).isNull();
+        }
+
+        @Test
+        void shouldThrowDisabledExceptionWhenAccountIsDeactivated(){
+            SignInRequest request = new SignInRequest("test@email.com", "Pass123!");
+
+            User mockUser = new UserTestDataBuilder()
+                    .withActive(false)
+                    .build();
+
+            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(DisabledException.class);
+
+            assertThatThrownBy(() -> authService.signIn(request))
+                    .isInstanceOf(DisabledException.class);
+
+            verifyNoInteractions(refreshTokenService, jwtProvider);
         }
 
         @Test

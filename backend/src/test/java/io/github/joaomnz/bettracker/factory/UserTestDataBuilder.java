@@ -12,6 +12,7 @@ public class UserTestDataBuilder {
     private String password = "Pass123!";
     private int failedLoginAttempts = 0;
     private LocalDateTime lockoutEnd = null;
+    private boolean active = true;
     private final PasswordEncoder ENCODER  = new BCryptPasswordEncoder(12);
 
     public UserTestDataBuilder withName(String name){
@@ -39,6 +40,11 @@ public class UserTestDataBuilder {
         return this;
     }
 
+    public UserTestDataBuilder withActive(boolean active){
+        this.active = active;
+        return this;
+    }
+
     public User build(){
         return User.builder()
                 .name(name)
@@ -46,6 +52,7 @@ public class UserTestDataBuilder {
                 .password(ENCODER.encode(password))
                 .failedLoginAttempts(failedLoginAttempts)
                 .lockoutEnd(lockoutEnd)
+                .active(active)
                 .build();
     }
 }

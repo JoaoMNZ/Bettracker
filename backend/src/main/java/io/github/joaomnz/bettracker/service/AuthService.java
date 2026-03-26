@@ -18,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -32,6 +33,7 @@ public class AuthService {
     private final OtpTokenService otpTokenService;
     private final EmailService emailService;
     private final GoogleAuthService googleAuthService;
+    private final Clock clock;
 
     @Transactional
     public AuthResponse signUp(SignUpRequest request){
@@ -52,7 +54,7 @@ public class AuthService {
         String otp = otpTokenService.createOtp(
                 savedUser,
                 OtpPurpose.EMAIL_VERIFICATION,
-                LocalDateTime.now().plusHours(24)
+                LocalDateTime.now(clock).plusHours(24)
         );
 
         emailService.sendEmailVerificationCode(savedUser.getEmail(), savedUser.getName(), otp);
@@ -71,7 +73,7 @@ public class AuthService {
             throw new BusinessRuleException("Invalid credentials.");
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
 
         if(user.getLockoutEnd() != null && user.getLockoutEnd().isAfter(now)){
             long minutesLeft = ChronoUnit.MINUTES.between(now, user.getLockoutEnd());
@@ -135,7 +137,7 @@ public class AuthService {
                     String otp = otpTokenService.createOtp(
                             user,
                             OtpPurpose.PASSWORD_RESET,
-                            LocalDateTime.now().plusMinutes(15)
+                            LocalDateTime.now(clock).plusMinutes(15)
                     );
 
                     emailService.sendPasswordResetCode(user.getEmail(), user.getName(), otp);
@@ -189,7 +191,7 @@ public class AuthService {
         String otp = otpTokenService.createOtp(
                 user,
                 OtpPurpose.EMAIL_VERIFICATION,
-                LocalDateTime.now().plusHours(24)
+                LocalDateTime.now(clock).plusHours(24)
         );
 
         emailService.sendEmailVerificationCode(user.getEmail(), user.getName(), otp);
