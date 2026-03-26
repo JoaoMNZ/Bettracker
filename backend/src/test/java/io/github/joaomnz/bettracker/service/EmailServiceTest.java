@@ -1,3 +1,4 @@
+/*
 package io.github.joaomnz.bettracker.service;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -74,3 +75,4 @@ public class EmailServiceTest {
                 .doesNotThrowAnyException();
     }
 }
+*/

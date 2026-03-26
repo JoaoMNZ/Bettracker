@@ -68,7 +68,7 @@ public class AuthService {
                 .orElseThrow(() -> new BusinessRuleException("Invalid credentials."));
 
         if(user.getPassword() == null){
-            throw new BusinessRuleException("Invalid Credentials.");
+            throw new BusinessRuleException("Invalid credentials.");
         }
 
         LocalDateTime now = LocalDateTime.now();

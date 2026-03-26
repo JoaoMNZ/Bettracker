@@ -1,3 +1,4 @@
+/*
 package io.github.joaomnz.bettracker.factory;
 
 import io.github.joaomnz.bettracker.model.RefreshToken;
@@ -26,3 +27,4 @@ public class RefreshTokenFactory {
         );
     }
 }
+*/

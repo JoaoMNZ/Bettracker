@@ -1,3 +1,4 @@
+/*
 package io.github.joaomnz.bettracker.factory;
 
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
@@ -41,3 +42,4 @@ public final class OtpTokenFactory {
         );
     }
 }
+*/
