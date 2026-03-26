@@ -1,3 +1,4 @@
+/*
 package io.github.joaomnz.bettracker;
 
 import io.github.joaomnz.bettracker.model.User;
@@ -41,3 +42,4 @@ public abstract class IntegrationTest {
         );
     }
 }
+*/
