@@ -1,8 +1,6 @@
 package io.github.joaomnz.bettracker.service;
 
-import io.github.joaomnz.bettracker.dto.auth.AuthResponse;
-import io.github.joaomnz.bettracker.dto.auth.SignInRequest;
-import io.github.joaomnz.bettracker.dto.auth.SignUpRequest;
+import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
@@ -40,6 +38,7 @@ public class AuthServiceTest {
     @Mock private RefreshTokenService refreshTokenService;
     @Mock private OtpTokenService otpTokenService;
     @Mock private EmailService emailService;
+    @Mock private GoogleAuthService googleAuthService;
     @Spy private Clock clock = Clock.fixed(Instant.parse("2026-03-26T10:00:00Z"), ZoneOffset.UTC);
 
     @InjectMocks
@@ -67,9 +66,9 @@ public class AuthServiceTest {
             when(passwordEncoder.encode(password)).thenReturn("encoded-pass");
             when(userRepository.save(any(User.class))).thenReturn(mockSavedUser);
 
-            when(otpTokenService.createOtp(eq(mockSavedUser), eq(OtpPurpose.EMAIL_VERIFICATION), any(LocalDateTime.class))).thenReturn("123456");
-            when(refreshTokenService.generateToken(mockSavedUser)).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(any(UserDetailsImpl.class))).thenReturn("mock-jwt");
+            when(otpTokenService.createOtp(same(mockSavedUser), eq(OtpPurpose.EMAIL_VERIFICATION), any(LocalDateTime.class))).thenReturn("123456");
+            when(refreshTokenService.generateToken(same(mockSavedUser))).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(expectedNormalizedEmail)))).thenReturn("mock-jwt");
 
             AuthResponse response = authService.signUp(request);
 
@@ -120,8 +119,8 @@ public class AuthServiceTest {
                     .build();
 
             when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(mockUser));
-            when(refreshTokenService.generateToken(mockUser)).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(any(UserDetailsImpl.class))).thenReturn("mock-jwt");
+            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(expectedNormalizedEmail)))).thenReturn("mock-jwt");
 
             AuthResponse response = authService.signIn(request);
 
@@ -199,8 +198,8 @@ public class AuthServiceTest {
                     .build();
 
             when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
-            when(refreshTokenService.generateToken(mockUser)).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(any(UserDetailsImpl.class))).thenReturn("mock-jwt");
+            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(email)))).thenReturn("mock-jwt");
 
             AuthResponse response = authService.signIn(request);
 
@@ -266,6 +265,46 @@ public class AuthServiceTest {
             assertThat(mockUser.getLockoutEnd()).isNotNull();
 
             verifyNoInteractions(refreshTokenService, jwtProvider);
+        }
+    }
+
+    @Nested
+    @DisplayName("Google OAuth")
+    class GoogleOAuthTests {
+        @Test
+        void shouldAuthenticateReturningGoogleUserAndResetLockout(){
+            String name = "Test User";
+            String email = "test@email.com";
+            String googleId = "google-id";
+            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(name, email, googleId);
+            User mockUser = new UserTestDataBuilder()
+                    .withName(name)
+                    .withEmail(email)
+                    .withGoogleId(googleId)
+                    .withFailedLoginAttempts(3)
+                    .withLockoutEnd(LocalDateTime.now(clock).plusMinutes(15))
+                    .build();
+
+            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
+            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.of(mockUser));
+            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(email)))).thenReturn("mock-jwt");
+
+            AuthResponse response = authService.authenticateWithGoogle(request);
+
+            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
+            assertThat(mockUser.getLockoutEnd()).isNull();
+            verify(userRepository).save(mockUser);
+
+            assertThat(response).isNotNull();
+            assertThat(response.refreshToken()).isEqualTo("mock-refresh");
+            assertThat(response.accessToken()).isEqualTo("mock-jwt");
+            assertThat(response.user().name()).isEqualTo(name);
+            assertThat(response.user().email()).isEqualTo(email);
+
+            verify(userRepository, never()).findByEmail(any());
+            verifyNoInteractions(emailService);
         }
     }
 }

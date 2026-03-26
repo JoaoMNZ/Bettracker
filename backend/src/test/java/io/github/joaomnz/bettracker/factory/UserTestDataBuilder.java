@@ -10,10 +10,11 @@ public class UserTestDataBuilder {
     private String name = "Default Name";
     private String email = "default@email.com";
     private String password = "Pass123!";
+    private String googleId;
     private int failedLoginAttempts = 0;
-    private LocalDateTime lockoutEnd = null;
+    private LocalDateTime lockoutEnd;
     private boolean active = true;
-    private final PasswordEncoder ENCODER  = new BCryptPasswordEncoder(12);
+    private final PasswordEncoder ENCODER = new BCryptPasswordEncoder(12);
 
     public UserTestDataBuilder withName(String name){
         this.name = name;
@@ -27,6 +28,11 @@ public class UserTestDataBuilder {
 
     public UserTestDataBuilder withPassword(String password){
         this.password = password;
+        return this;
+    }
+
+    public UserTestDataBuilder withGoogleId(String googleId){
+        this.googleId = googleId;
         return this;
     }
 
@@ -50,6 +56,7 @@ public class UserTestDataBuilder {
                 .name(name)
                 .email(email)
                 .password(ENCODER.encode(password))
+                .googleId(googleId)
                 .failedLoginAttempts(failedLoginAttempts)
                 .lockoutEnd(lockoutEnd)
                 .active(active)
