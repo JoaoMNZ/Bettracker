@@ -24,6 +24,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Objects;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -132,7 +133,9 @@ public class AuthServiceTest {
             assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
             assertThat(mockUser.getLockoutEnd()).isNull();
 
-            verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+            verify(authenticationManager).authenticate(argThat(token ->
+                    Objects.equals(token.getPrincipal(), expectedNormalizedEmail) && Objects.equals(token.getCredentials(), password)
+            ));
         }
 
         @Test
