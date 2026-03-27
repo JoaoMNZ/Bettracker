@@ -209,7 +209,7 @@ public class AuthService {
                     existingUser.setGoogleId(googleInfo.googleId());
                     if(!existingUser.isVerified()){
                         existingUser.setVerified(true);
-                        emailService.sendWelcome(normalizedEmail, existingUser.getName());
+                        emailService.sendWelcome(existingUser.getEmail(), existingUser.getName());
                     }
 
                     return userRepository.save(existingUser);
