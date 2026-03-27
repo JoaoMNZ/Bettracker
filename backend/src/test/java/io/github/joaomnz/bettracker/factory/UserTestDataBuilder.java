@@ -14,6 +14,7 @@ public class UserTestDataBuilder {
     private int failedLoginAttempts = 0;
     private LocalDateTime lockoutEnd;
     private boolean active = true;
+    private boolean verified = false;
     private final PasswordEncoder ENCODER = new BCryptPasswordEncoder(12);
 
     public UserTestDataBuilder withName(String name){
@@ -51,6 +52,11 @@ public class UserTestDataBuilder {
         return this;
     }
 
+    public UserTestDataBuilder withVerified(boolean verified){
+        this.verified = verified;
+        return this;
+    }
+
     public User build(){
         return User.builder()
                 .name(name)
@@ -60,6 +66,7 @@ public class UserTestDataBuilder {
                 .failedLoginAttempts(failedLoginAttempts)
                 .lockoutEnd(lockoutEnd)
                 .active(active)
+                .verified(verified)
                 .build();
     }
 }
