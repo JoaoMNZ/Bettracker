@@ -594,4 +594,55 @@ public class AuthServiceTest {
             verifyNoInteractions(emailService);
         }
     }
+
+    @Nested
+    @DisplayName("Email Verification")
+    class EmailVerificationTests {
+        @Test
+        void shouldVerifyEmailAndSendWelcomeWhenOtpIsValid(){
+            Long userId = 1L;
+            String otp = "123456";
+
+            User user = new UserTestDataBuilder()
+                    .withId(userId)
+                    .withName("Test User")
+                    .withEmail("test@email.com")
+                    .withVerified(false)
+                    .build();
+
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            authService.verifyEmail(userId, new EmailVerificationRequest(otp));
+
+            verify(otpTokenService).verifyOtp(same(user), eq(otp), eq(OtpPurpose.EMAIL_VERIFICATION));
+            assertThat(user.isVerified()).isTrue();
+            verify(emailService).sendWelcome("test@email.com", "Test User");
+        }
+
+        @Test
+        void shouldThrowWhenUserIsNotFound(){
+            when(userRepository.findById(any())).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> authService.verifyEmail(1L, new EmailVerificationRequest("123456")))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("User not found.");
+
+            verifyNoInteractions(otpTokenService, emailService);
+        }
+
+        @Test
+        void shouldThrowWhenUserIsAlreadyVerified(){
+            User user = new UserTestDataBuilder()
+                    .withVerified(true)
+                    .build();
+
+            when(userRepository.findById(any())).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> authService.verifyEmail(1L, new EmailVerificationRequest("123456")))
+                    .isInstanceOf(BusinessRuleException.class)
+                    .hasMessage("User is already verified.");
+
+            verifyNoInteractions(otpTokenService, emailService);
+        }
+    }
 }

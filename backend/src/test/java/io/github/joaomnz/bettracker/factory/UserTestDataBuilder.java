@@ -7,6 +7,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.LocalDateTime;
 
 public class UserTestDataBuilder {
+    private Long id;
     private String name = "Default Name";
     private String email = "default@email.com";
     private String password = "Pass123!";
@@ -16,6 +17,11 @@ public class UserTestDataBuilder {
     private boolean active = true;
     private boolean verified = false;
     private final PasswordEncoder ENCODER = new BCryptPasswordEncoder(12);
+
+    public UserTestDataBuilder withId(Long id){
+        this.id = id;
+        return this;
+    }
 
     public UserTestDataBuilder withName(String name){
         this.name = name;
@@ -59,6 +65,7 @@ public class UserTestDataBuilder {
 
     public User build(){
         return User.builder()
+                .id(id)
                 .name(name)
                 .email(email)
                 .password(ENCODER.encode(password))
