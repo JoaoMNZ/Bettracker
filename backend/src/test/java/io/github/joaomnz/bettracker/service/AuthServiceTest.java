@@ -1,6 +1,7 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.auth.*;
+import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
@@ -493,7 +494,7 @@ public class AuthServiceTest {
 
     @Nested
     @DisplayName("Logout")
-    class LogoutTests  {
+    class LogoutTests {
         @Test
         void shouldRevokeTokenOnLogout(){
             String token = "refresh-token";
@@ -501,6 +502,37 @@ public class AuthServiceTest {
             authService.logout(new LogoutRequest(token));
 
             verify(refreshTokenService).revokeToken(token);
+        }
+    }
+
+    @Nested
+    @DisplayName("Forgot Password")
+    class ForgotPasswordTests {
+        @Test
+        void shouldSendPasswordResetCodeWhenEmailIsRegistered(){
+            String email = "  TEST@Email.com  ";
+            String expectedNormalizedEmail = "test@email.com";
+
+            User user = new UserTestDataBuilder()
+                    .withName("Test User")
+                    .withEmail(expectedNormalizedEmail)
+                    .build();
+
+            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(user));
+            when(otpTokenService.createOtp(same(user), eq(OtpPurpose.PASSWORD_RESET), any(LocalDateTime.class))).thenReturn("123456");
+
+            authService.forgotPassword(new ForgotPasswordRequest(email));
+
+            verify(emailService).sendPasswordResetCode(expectedNormalizedEmail, "Test User", "123456");
+        }
+
+        @Test
+        void shouldDoNothingWhenEmailIsNotRegistered(){
+            when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
+
+            authService.forgotPassword(new ForgotPasswordRequest("test@email.com"));
+
+            verifyNoInteractions(otpTokenService, emailService);
         }
     }
 }
