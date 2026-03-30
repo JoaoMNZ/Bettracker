@@ -472,4 +472,35 @@ public class AuthServiceTest {
             verify(userRepository, never()).save(any());
         }
     }
+
+    @Nested
+    @DisplayName("Refresh Token")
+    class RefreshTokenTests {
+        @Test
+        void shouldReturnNewTokensWhenRefreshTokenIsValid(){
+            String token = "refresh-token";
+            User user = new UserTestDataBuilder()
+                    .withEmail("test@email.com")
+                    .build();
+
+            when(refreshTokenService.consumeToken(token)).thenReturn(user);
+            when(refreshTokenService.generateToken(same(user))).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals("test@email.com")))).thenReturn("mock-jwt");
+
+            authService.refresh(new RefreshTokenRequest(token));
+        }
+    }
+
+    @Nested
+    @DisplayName("Logout")
+    class LogoutTests  {
+        @Test
+        void shouldRevokeTokenOnLogout(){
+            String token = "refresh-token";
+
+            authService.logout(new LogoutRequest(token));
+
+            verify(refreshTokenService).revokeToken(token);
+        }
+    }
 }
