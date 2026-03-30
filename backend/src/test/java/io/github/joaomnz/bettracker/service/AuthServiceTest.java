@@ -5,6 +5,7 @@ import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
+import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.factory.UserTestDataBuilder;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
@@ -533,6 +534,64 @@ public class AuthServiceTest {
             authService.forgotPassword(new ForgotPasswordRequest("test@email.com"));
 
             verifyNoInteractions(otpTokenService, emailService);
+        }
+    }
+
+    @Nested
+    @DisplayName("Reset Password")
+    class ResetPasswordTests {
+        @Test
+        void shouldResetPasswordWhenOtpIsValidAndNewPasswordIsDifferent(){
+            String email = "  TEST@Email.com  ";
+            String expectedNormalizedEmail = "test@email.com";
+            String otp = "123456";
+            String newPassword = "Pass123!";
+
+            User user = new UserTestDataBuilder()
+                    .withName("Test User")
+                    .withEmail(expectedNormalizedEmail)
+                    .withPassword("another-password")
+                    .build();
+
+            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(user));
+            when(passwordEncoder.matches(newPassword, user.getPassword())).thenReturn(false);
+            when(passwordEncoder.encode(newPassword)).thenReturn("encoded-password");
+
+            authService.resetPassword(new ResetPasswordRequest(email, otp, newPassword));
+
+            verify(otpTokenService).verifyOtp(same(user), eq(otp), eq(OtpPurpose.PASSWORD_RESET));
+            assertThat(user.getPassword()).isEqualTo("encoded-password");
+            verify(emailService).notifyPasswordChange(expectedNormalizedEmail, "Test User");
+        }
+
+        @Test
+        void shouldThrowWhenEmailIsNotRegistered(){
+            when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest("test@email.com", "123456", "Pass123!")))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("No verification code was requested.");
+
+            verifyNoInteractions(otpTokenService, passwordEncoder, emailService);
+        }
+
+        @Test
+        void shouldThrowWhenNewPasswordIsSameAsCurrentPassword(){
+            String newPassword = "Pass123!";
+
+            User user = new UserTestDataBuilder()
+                    .withPassword("Pass123!")
+                    .build();
+
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(user));
+            when(passwordEncoder.matches(newPassword, user.getPassword())).thenReturn(true);
+
+            assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest("test@email.com", "123456", newPassword)))
+                    .isInstanceOf(BusinessRuleException.class)
+                    .hasMessage("New password cannot be the same as your current password.");
+
+            verify(passwordEncoder, never()).encode(any());
+            verifyNoInteractions(emailService);
         }
     }
 }
