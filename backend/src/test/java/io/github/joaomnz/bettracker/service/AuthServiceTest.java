@@ -645,4 +645,53 @@ public class AuthServiceTest {
             verifyNoInteractions(otpTokenService, emailService);
         }
     }
+
+    @Nested
+    @DisplayName("Resend Email Verification")
+    class ResendEmailVerificationTests {
+        @Test
+        void shouldCreateOtpAndSendVerificationEmailWhenUserIsUnverified(){
+            Long userId = 1L;
+
+            User user = new UserTestDataBuilder()
+                    .withId(userId)
+                    .withName("Test User")
+                    .withEmail("test@email.com")
+                    .withVerified(false)
+                    .build();
+
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(otpTokenService.createOtp(same(user), eq(OtpPurpose.EMAIL_VERIFICATION), any(LocalDateTime.class))).thenReturn("123456");
+
+            authService.resendEmailVerification(userId);
+
+            verify(emailService).sendEmailVerificationCode("test@email.com", "Test User", "123456");
+        }
+
+        @Test
+        void shouldThrowWhenUserIsNotFound(){
+            when(userRepository.findById(any())).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> authService.resendEmailVerification(1L))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("User not found.");
+
+            verifyNoInteractions(otpTokenService, emailService);
+        }
+
+        @Test
+        void shouldThrowWhenUserIsAlreadyVerified(){
+            User user = new UserTestDataBuilder()
+                    .withVerified(true)
+                    .build();
+
+            when(userRepository.findById(any())).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> authService.resendEmailVerification(1L))
+                    .isInstanceOf(BusinessRuleException.class)
+                    .hasMessage("User is already verified.");
+
+            verifyNoInteractions(otpTokenService, emailService);
+        }
+    }
 }
