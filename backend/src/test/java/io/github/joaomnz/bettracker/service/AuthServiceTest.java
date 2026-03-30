@@ -1,9 +1,11 @@
 package io.github.joaomnz.bettracker.service;
 
 import io.github.joaomnz.bettracker.dto.auth.*;
+import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
+import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
 import io.github.joaomnz.bettracker.factory.UserTestDataBuilder;
 import io.github.joaomnz.bettracker.model.User;
 import io.github.joaomnz.bettracker.repository.UserRepository;
@@ -470,6 +472,226 @@ public class AuthServiceTest {
 
             verifyNoInteractions(refreshTokenService, jwtProvider, emailService);
             verify(userRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Refresh Token")
+    class RefreshTokenTests {
+        @Test
+        void shouldReturnNewTokensWhenRefreshTokenIsValid(){
+            String token = "refresh-token";
+            User user = new UserTestDataBuilder()
+                    .withEmail("test@email.com")
+                    .build();
+
+            when(refreshTokenService.consumeToken(token)).thenReturn(user);
+            when(refreshTokenService.generateToken(same(user))).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals("test@email.com")))).thenReturn("mock-jwt");
+
+            authService.refresh(new RefreshTokenRequest(token));
+        }
+    }
+
+    @Nested
+    @DisplayName("Logout")
+    class LogoutTests {
+        @Test
+        void shouldRevokeTokenOnLogout(){
+            String token = "refresh-token";
+
+            authService.logout(new LogoutRequest(token));
+
+            verify(refreshTokenService).revokeToken(token);
+        }
+    }
+
+    @Nested
+    @DisplayName("Forgot Password")
+    class ForgotPasswordTests {
+        @Test
+        void shouldSendPasswordResetCodeWhenEmailIsRegistered(){
+            String email = "  TEST@Email.com  ";
+            String expectedNormalizedEmail = "test@email.com";
+
+            User user = new UserTestDataBuilder()
+                    .withName("Test User")
+                    .withEmail(expectedNormalizedEmail)
+                    .build();
+
+            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(user));
+            when(otpTokenService.createOtp(same(user), eq(OtpPurpose.PASSWORD_RESET), any(LocalDateTime.class))).thenReturn("123456");
+
+            authService.forgotPassword(new ForgotPasswordRequest(email));
+
+            verify(emailService).sendPasswordResetCode(expectedNormalizedEmail, "Test User", "123456");
+        }
+
+        @Test
+        void shouldDoNothingWhenEmailIsNotRegistered(){
+            when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
+
+            authService.forgotPassword(new ForgotPasswordRequest("test@email.com"));
+
+            verifyNoInteractions(otpTokenService, emailService);
+        }
+    }
+
+    @Nested
+    @DisplayName("Reset Password")
+    class ResetPasswordTests {
+        @Test
+        void shouldResetPasswordWhenOtpIsValidAndNewPasswordIsDifferent(){
+            String email = "  TEST@Email.com  ";
+            String expectedNormalizedEmail = "test@email.com";
+            String otp = "123456";
+            String newPassword = "Pass123!";
+
+            User user = new UserTestDataBuilder()
+                    .withName("Test User")
+                    .withEmail(expectedNormalizedEmail)
+                    .withPassword("another-password")
+                    .build();
+
+            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(user));
+            when(passwordEncoder.matches(newPassword, user.getPassword())).thenReturn(false);
+            when(passwordEncoder.encode(newPassword)).thenReturn("encoded-password");
+
+            authService.resetPassword(new ResetPasswordRequest(email, otp, newPassword));
+
+            verify(otpTokenService).verifyOtp(same(user), eq(otp), eq(OtpPurpose.PASSWORD_RESET));
+            assertThat(user.getPassword()).isEqualTo("encoded-password");
+            verify(emailService).notifyPasswordChange(expectedNormalizedEmail, "Test User");
+        }
+
+        @Test
+        void shouldThrowWhenEmailIsNotRegistered(){
+            when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest("test@email.com", "123456", "Pass123!")))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("No verification code was requested.");
+
+            verifyNoInteractions(otpTokenService, passwordEncoder, emailService);
+        }
+
+        @Test
+        void shouldThrowWhenNewPasswordIsSameAsCurrentPassword(){
+            String newPassword = "Pass123!";
+
+            User user = new UserTestDataBuilder()
+                    .withPassword("Pass123!")
+                    .build();
+
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(user));
+            when(passwordEncoder.matches(newPassword, user.getPassword())).thenReturn(true);
+
+            assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest("test@email.com", "123456", newPassword)))
+                    .isInstanceOf(BusinessRuleException.class)
+                    .hasMessage("New password cannot be the same as your current password.");
+
+            verify(passwordEncoder, never()).encode(any());
+            verifyNoInteractions(emailService);
+        }
+    }
+
+    @Nested
+    @DisplayName("Email Verification")
+    class EmailVerificationTests {
+        @Test
+        void shouldVerifyEmailAndSendWelcomeWhenOtpIsValid(){
+            Long userId = 1L;
+            String otp = "123456";
+
+            User user = new UserTestDataBuilder()
+                    .withId(userId)
+                    .withName("Test User")
+                    .withEmail("test@email.com")
+                    .withVerified(false)
+                    .build();
+
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            authService.verifyEmail(userId, new EmailVerificationRequest(otp));
+
+            verify(otpTokenService).verifyOtp(same(user), eq(otp), eq(OtpPurpose.EMAIL_VERIFICATION));
+            assertThat(user.isVerified()).isTrue();
+            verify(emailService).sendWelcome("test@email.com", "Test User");
+        }
+
+        @Test
+        void shouldThrowWhenUserIsNotFound(){
+            when(userRepository.findById(any())).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> authService.verifyEmail(1L, new EmailVerificationRequest("123456")))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("User not found.");
+
+            verifyNoInteractions(otpTokenService, emailService);
+        }
+
+        @Test
+        void shouldThrowWhenUserIsAlreadyVerified(){
+            User user = new UserTestDataBuilder()
+                    .withVerified(true)
+                    .build();
+
+            when(userRepository.findById(any())).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> authService.verifyEmail(1L, new EmailVerificationRequest("123456")))
+                    .isInstanceOf(BusinessRuleException.class)
+                    .hasMessage("User is already verified.");
+
+            verifyNoInteractions(otpTokenService, emailService);
+        }
+    }
+
+    @Nested
+    @DisplayName("Resend Email Verification")
+    class ResendEmailVerificationTests {
+        @Test
+        void shouldCreateOtpAndSendVerificationEmailWhenUserIsUnverified(){
+            Long userId = 1L;
+
+            User user = new UserTestDataBuilder()
+                    .withId(userId)
+                    .withName("Test User")
+                    .withEmail("test@email.com")
+                    .withVerified(false)
+                    .build();
+
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(otpTokenService.createOtp(same(user), eq(OtpPurpose.EMAIL_VERIFICATION), any(LocalDateTime.class))).thenReturn("123456");
+
+            authService.resendEmailVerification(userId);
+
+            verify(emailService).sendEmailVerificationCode("test@email.com", "Test User", "123456");
+        }
+
+        @Test
+        void shouldThrowWhenUserIsNotFound(){
+            when(userRepository.findById(any())).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> authService.resendEmailVerification(1L))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage("User not found.");
+
+            verifyNoInteractions(otpTokenService, emailService);
+        }
+
+        @Test
+        void shouldThrowWhenUserIsAlreadyVerified(){
+            User user = new UserTestDataBuilder()
+                    .withVerified(true)
+                    .build();
+
+            when(userRepository.findById(any())).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> authService.resendEmailVerification(1L))
+                    .isInstanceOf(BusinessRuleException.class)
+                    .hasMessage("User is already verified.");
+
+            verifyNoInteractions(otpTokenService, emailService);
         }
     }
 }
