@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
+@DisplayName("AuthService")
 @ExtendWith(MockitoExtension.class)
 public class AuthServiceTest {
     @Mock private UserRepository userRepository;
@@ -68,7 +69,8 @@ public class AuthServiceTest {
             when(passwordEncoder.encode(password)).thenReturn("encoded-password");
             when(userRepository.save(any(User.class))).thenReturn(mockSavedUser);
 
-            when(otpTokenService.createOtp(same(mockSavedUser), eq(OtpPurpose.EMAIL_VERIFICATION), any(LocalDateTime.class))).thenReturn("123456");
+            LocalDateTime expectedExpiry = LocalDateTime.now(clock).plusHours(24);
+            when(otpTokenService.createOtp(same(mockSavedUser), eq(OtpPurpose.EMAIL_VERIFICATION), eq(expectedExpiry))).thenReturn("123456");
 
             when(refreshTokenService.generateToken(same(mockSavedUser))).thenReturn("mock-refresh");
             when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(expectedNormalizedEmail)))).thenReturn("mock-jwt");
@@ -138,7 +140,7 @@ public class AuthServiceTest {
         }
 
         @Test
-        void shouldThrowExceptionWhenEmailIsNotFound(){
+        void shouldThrowBusinessRuleExceptionWhenEmailIsNotFound(){
             when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
@@ -426,16 +428,14 @@ public class AuthServiceTest {
     class RefreshTokenTests {
         @Test
         void shouldReturnNewTokensWhenRefreshTokenIsValid(){
-            String token = "refresh-token";
-            User user = new UserTestDataBuilder()
-                    .withEmail("test@email.com")
-                    .build();
+            User mockUser = new UserTestDataBuilder().build();
 
-            when(refreshTokenService.consumeToken(token)).thenReturn(user);
-            when(refreshTokenService.generateToken(same(user))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals("test@email.com")))).thenReturn("mock-jwt");
+            when(refreshTokenService.consumeToken("refresh-token")).thenReturn(mockUser);
 
-            authService.refresh(new RefreshTokenRequest(token));
+            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(mockUser.getEmail())))).thenReturn("mock-jwt");
+
+            authService.refresh(new RefreshTokenRequest("refresh-token"));
         }
     }
 
@@ -444,11 +444,9 @@ public class AuthServiceTest {
     class LogoutTests {
         @Test
         void shouldRevokeTokenOnLogout(){
-            String token = "refresh-token";
+            authService.logout(new LogoutRequest("refresh-token"));
 
-            authService.logout(new LogoutRequest(token));
-
-            verify(refreshTokenService).revokeToken(token);
+            verify(refreshTokenService).revokeToken("refresh-token");
         }
     }
 
@@ -460,13 +458,15 @@ public class AuthServiceTest {
             String email = "  TEST@Email.com  ";
             String expectedNormalizedEmail = "test@email.com";
 
-            User user = new UserTestDataBuilder()
+            User mockUser = new UserTestDataBuilder()
                     .withName("Test User")
                     .withEmail(expectedNormalizedEmail)
                     .build();
 
-            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(user));
-            when(otpTokenService.createOtp(same(user), eq(OtpPurpose.PASSWORD_RESET), any(LocalDateTime.class))).thenReturn("123456");
+            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(mockUser));
+
+            LocalDateTime expectedExpiry = LocalDateTime.now(clock).plusMinutes(15);
+            when(otpTokenService.createOtp(same(mockUser), eq(OtpPurpose.PASSWORD_RESET), eq(expectedExpiry))).thenReturn("123456");
 
             authService.forgotPassword(new ForgotPasswordRequest(email));
 
@@ -500,18 +500,22 @@ public class AuthServiceTest {
                     .build();
 
             when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(user));
+
             when(passwordEncoder.matches(newPassword, user.getPassword())).thenReturn(false);
+
             when(passwordEncoder.encode(newPassword)).thenReturn("encoded-password");
 
             authService.resetPassword(new ResetPasswordRequest(email, otp, newPassword));
 
             verify(otpTokenService).verifyOtp(same(user), eq(otp), eq(OtpPurpose.PASSWORD_RESET));
+
             assertThat(user.getPassword()).isEqualTo("encoded-password");
+
             verify(emailService).notifyPasswordChange(expectedNormalizedEmail, "Test User");
         }
 
         @Test
-        void shouldThrowWhenEmailIsNotRegistered(){
+        void shouldThrowResourceNotFoundExceptionWhenEmailIsNotRegistered(){
             when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest("test@email.com", "123456", "Pass123!")))
@@ -522,15 +526,31 @@ public class AuthServiceTest {
         }
 
         @Test
-        void shouldThrowWhenNewPasswordIsSameAsCurrentPassword(){
-            String newPassword = "Pass123!";
-
+        void shouldResetPasswordWhenUserHasNoCurrentPassword(){
             User user = new UserTestDataBuilder()
-                    .withPassword("Pass123!")
+                    .withPassword(null)
                     .build();
 
             when(userRepository.findByEmail(any())).thenReturn(Optional.of(user));
-            when(passwordEncoder.matches(newPassword, user.getPassword())).thenReturn(true);
+
+            when(passwordEncoder.encode(any())).thenReturn("encoded-password");
+
+            authService.resetPassword(new ResetPasswordRequest("test@email.com", "123456", "Pass123!"));
+
+            verify(passwordEncoder, never()).matches(any(), any());
+        }
+
+        @Test
+        void shouldThrowBusinessRuleExceptionWhenNewPasswordIsSameAsCurrentPassword(){
+            String newPassword = "Pass123!";
+
+            User mockUser = new UserTestDataBuilder()
+                    .withPassword("Pass123!")
+                    .build();
+
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
+            when(passwordEncoder.matches(any(), any())).thenReturn(true);
 
             assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest("test@email.com", "123456", newPassword)))
                     .isInstanceOf(BusinessRuleException.class)
@@ -550,7 +570,6 @@ public class AuthServiceTest {
             String otp = "123456";
 
             User user = new UserTestDataBuilder()
-                    .withId(userId)
                     .withName("Test User")
                     .withEmail("test@email.com")
                     .withVerified(false)
@@ -561,12 +580,14 @@ public class AuthServiceTest {
             authService.verifyEmail(userId, new EmailVerificationRequest(otp));
 
             verify(otpTokenService).verifyOtp(same(user), eq(otp), eq(OtpPurpose.EMAIL_VERIFICATION));
+
             assertThat(user.isVerified()).isTrue();
+
             verify(emailService).sendWelcome("test@email.com", "Test User");
         }
 
         @Test
-        void shouldThrowWhenUserIsNotFound(){
+        void shouldThrowResourceNotFoundExceptionWhenUserIsNotFound(){
             when(userRepository.findById(any())).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> authService.verifyEmail(1L, new EmailVerificationRequest("123456")))
@@ -577,7 +598,7 @@ public class AuthServiceTest {
         }
 
         @Test
-        void shouldThrowWhenUserIsAlreadyVerified(){
+        void shouldThrowBusinessRuleExceptionWhenUserIsAlreadyVerified(){
             User user = new UserTestDataBuilder()
                     .withVerified(true)
                     .build();
@@ -600,14 +621,15 @@ public class AuthServiceTest {
             Long userId = 1L;
 
             User user = new UserTestDataBuilder()
-                    .withId(userId)
                     .withName("Test User")
                     .withEmail("test@email.com")
                     .withVerified(false)
                     .build();
 
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(otpTokenService.createOtp(same(user), eq(OtpPurpose.EMAIL_VERIFICATION), any(LocalDateTime.class))).thenReturn("123456");
+
+            LocalDateTime expectedExpiry = LocalDateTime.now(clock).plusHours(24);
+            when(otpTokenService.createOtp(same(user), eq(OtpPurpose.EMAIL_VERIFICATION), eq(expectedExpiry))).thenReturn("123456");
 
             authService.resendEmailVerification(userId);
 
@@ -615,7 +637,7 @@ public class AuthServiceTest {
         }
 
         @Test
-        void shouldThrowWhenUserIsNotFound(){
+        void shouldThrowResourceNotFoundExceptionWhenUserIsNotFound(){
             when(userRepository.findById(any())).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> authService.resendEmailVerification(1L))
@@ -626,7 +648,7 @@ public class AuthServiceTest {
         }
 
         @Test
-        void shouldThrowWhenUserIsAlreadyVerified(){
+        void shouldThrowBusinessRuleExceptionWhenUserIsAlreadyVerified(){
             User user = new UserTestDataBuilder()
                     .withVerified(true)
                     .build();

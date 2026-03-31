@@ -100,6 +100,23 @@ public class AuthService {
         }
     }
 
+    public AuthResponse authenticateWithGoogle(GoogleLoginRequest request) {
+        GoogleUserInfo googleInfo = googleAuthService.verifyToken(request.token());
+
+        User user = userRepository.findByGoogleId(googleInfo.googleId())
+                .orElseGet(() -> linkOrCreateUser(googleInfo));
+
+        if (!user.isActive()) {
+            throw new DisabledException("Your account is deactivated. Contact support.");
+        }
+
+        user.setFailedLoginAttempts(0);
+        user.setLockoutEnd(null);
+        userRepository.save(user);
+
+        return buildAuthResponse(user);
+    }
+
     @Transactional(noRollbackFor = BusinessRuleException.class)
     public AuthResponse refresh(RefreshTokenRequest request){
         User user = refreshTokenService.consumeToken(request.refreshToken());
@@ -178,23 +195,6 @@ public class AuthService {
         );
 
         emailService.sendEmailVerificationCode(user.getEmail(), user.getName(), otp);
-    }
-
-    public AuthResponse authenticateWithGoogle(GoogleLoginRequest request) {
-        GoogleUserInfo googleInfo = googleAuthService.verifyToken(request.token());
-
-        User user = userRepository.findByGoogleId(googleInfo.googleId())
-                .orElseGet(() -> linkOrCreateUser(googleInfo));
-
-        if (!user.isActive()) {
-            throw new DisabledException("Your account is deactivated. Contact support.");
-        }
-
-        user.setFailedLoginAttempts(0);
-        user.setLockoutEnd(null);
-        userRepository.save(user);
-
-        return buildAuthResponse(user);
     }
 
     private User linkOrCreateUser(GoogleUserInfo googleInfo) {
