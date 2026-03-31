@@ -3,6 +3,7 @@ package io.github.joaomnz.bettracker.service;
 import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
+import io.github.joaomnz.bettracker.enums.UserType;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
 import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
@@ -56,7 +57,6 @@ public class AuthServiceTest {
             String email = "  TEST@Email.com  ";
             String expectedNormalizedEmail = "test@email.com";
             String password = "Pass123!";
-            SignUpRequest request = new SignUpRequest(name, email, password);
 
             User mockSavedUser = new UserTestDataBuilder()
                     .withName(name)
@@ -64,36 +64,41 @@ public class AuthServiceTest {
                     .build();
 
             when(userRepository.existsByEmail(expectedNormalizedEmail)).thenReturn(false);
-            when(passwordEncoder.encode(password)).thenReturn("encoded-pass");
+
+            when(passwordEncoder.encode(password)).thenReturn("encoded-password");
             when(userRepository.save(any(User.class))).thenReturn(mockSavedUser);
 
             when(otpTokenService.createOtp(same(mockSavedUser), eq(OtpPurpose.EMAIL_VERIFICATION), any(LocalDateTime.class))).thenReturn("123456");
+
             when(refreshTokenService.generateToken(same(mockSavedUser))).thenReturn("mock-refresh");
             when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(expectedNormalizedEmail)))).thenReturn("mock-jwt");
 
-            AuthResponse response = authService.signUp(request);
+            AuthResponse response = authService.signUp(new SignUpRequest(name, email, password));
 
             verify(userRepository).save(userCaptor.capture());
             User capturedUser = userCaptor.getValue();
             assertThat(capturedUser.getName()).isEqualTo(name);
             assertThat(capturedUser.getEmail()).isEqualTo(expectedNormalizedEmail);
-            assertThat(capturedUser.getPassword()).isEqualTo("encoded-pass");
+            assertThat(capturedUser.getPassword()).isEqualTo("encoded-password");
 
-            assertThat(response).isNotNull();
+            verify(emailService).sendEmailVerificationCode(expectedNormalizedEmail, name, "123456");
+
             assertThat(response.refreshToken()).isEqualTo("mock-refresh");
             assertThat(response.accessToken()).isEqualTo("mock-jwt");
             assertThat(response.user().name()).isEqualTo(name);
             assertThat(response.user().email()).isEqualTo(expectedNormalizedEmail);
-
-            verify(emailService).sendEmailVerificationCode(expectedNormalizedEmail, name, "123456");
+            assertThat(response.user().unitValue()).isNull();
+            assertThat(response.user().userType()).isEqualTo(UserType.FREE);
+            assertThat(response.user().verified()).isFalse();
+            assertThat(response.user().passwordEnabled()).isTrue();
+            assertThat(response.user().googleLinked()).isFalse();
         }
 
         @Test
         void shouldThrowDataConflictExceptionWhenEmailIsAlreadyRegistered(){
-            SignUpRequest request = new SignUpRequest("Test User", "test@email.com", "Pass123!");
-            when(userRepository.existsByEmail("test@email.com")).thenReturn(true);
+            when(userRepository.existsByEmail(any())).thenReturn(true);
 
-            assertThatThrownBy(() -> authService.signUp(request))
+            assertThatThrownBy(() -> authService.signUp(new SignUpRequest("Test User", "test@email.com", "Pass123!")))
                     .isInstanceOf(DataConflictException.class)
                     .hasMessage("The email address is already registered.");
 

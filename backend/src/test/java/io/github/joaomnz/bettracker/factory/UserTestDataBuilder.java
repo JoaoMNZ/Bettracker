@@ -16,7 +16,7 @@ public class UserTestDataBuilder {
     private LocalDateTime lockoutEnd;
     private boolean active = true;
     private boolean verified = false;
-    private final PasswordEncoder ENCODER = new BCryptPasswordEncoder(12);
+    private final PasswordEncoder ENCODER = new BCryptPasswordEncoder(8);
 
     public UserTestDataBuilder withId(Long id){
         this.id = id;
