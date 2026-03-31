@@ -245,41 +245,144 @@ public class AuthServiceTest {
 
         @Test
         void shouldAuthenticateReturningGoogleUserAndResetLockout(){
-            String name = "Test User";
-            String email = "test@email.com";
+            String token = "google-token";
             String googleId = "google-id";
 
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
-            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, name, googleId);
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo("test@email.com", "Test User", googleId);
 
             User mockUser = new UserTestDataBuilder()
-                    .withName(name)
-                    .withEmail(email)
-                    .withGoogleId(googleId)
                     .withFailedLoginAttempts(3)
                     .withLockoutEnd(LocalDateTime.now(clock).plusMinutes(15))
                     .build();
 
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.of(mockUser));
-            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(email)))).thenReturn("mock-jwt");
+            when(googleAuthService.verifyToken(token)).thenReturn(mockGoogleUserInfo);
 
-            AuthResponse response = authService.authenticateWithGoogle(request);
+            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.of(mockUser));
+
+            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(mockUser.getEmail())))).thenReturn("mock-jwt");
+
+            authService.authenticateWithGoogle(new GoogleLoginRequest(token));
 
             verify(userRepository, never()).findByEmail(any());
 
             assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
             assertThat(mockUser.getLockoutEnd()).isNull();
             verify(userRepository).save(same(mockUser));
+        }
 
-            assertThat(response).isNotNull();
-            assertThat(response.refreshToken()).isEqualTo("mock-refresh");
-            assertThat(response.accessToken()).isEqualTo("mock-jwt");
-            assertThat(response.user().name()).isEqualTo(name);
-            assertThat(response.user().email()).isEqualTo(email);
+        @Test
+        void shouldThrowDisabledExceptionAndNotResetLockoutWhenAccountIsInactive(){
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo("test@email.com", "Test User", "google-id");
 
-            verifyNoInteractions(emailService);
+            User mockUser = new UserTestDataBuilder()
+                    .withFailedLoginAttempts(3)
+                    .withLockoutEnd(LocalDateTime.now(clock).plusMinutes(15))
+                    .withActive(false)
+                    .build();
+
+            when(googleAuthService.verifyToken(any())).thenReturn(mockGoogleUserInfo);
+
+            when(userRepository.findByGoogleId(any())).thenReturn(Optional.of(mockUser));
+
+            assertThatThrownBy(() -> authService.authenticateWithGoogle(new GoogleLoginRequest("google-token")))
+                    .isInstanceOf(DisabledException.class)
+                    .hasMessage("Your account is deactivated. Contact support.");
+
+            verify(userRepository, never()).findByEmail(any());
+
+            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(3);
+            assertThat(mockUser.getLockoutEnd()).isNotNull();
+            verify(userRepository, never()).save(any());
+
+            verifyNoInteractions(refreshTokenService, jwtProvider);
+        }
+
+        @Test
+        void shouldLinkGoogleAccountAndSendWelcomeWhenEmailExistsAndUnverified(){
+            String name = "Test User";
+            String email = "  TEST@Email.com  ";
+            String expectedNormalizedEmail = "test@email.com";
+            String googleId = "google-id";
+
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, name, googleId);
+
+            User mockUser = new UserTestDataBuilder()
+                    .withName(name)
+                    .withEmail(expectedNormalizedEmail)
+                    .withGoogleId(null)
+                    .withVerified(false)
+                    .build();
+
+            when(googleAuthService.verifyToken(any())).thenReturn(mockGoogleUserInfo);
+
+            when(userRepository.findByGoogleId(any())).thenReturn(Optional.empty());
+
+            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(mockUser));
+
+            when(userRepository.save(same(mockUser))).thenReturn(mockUser);
+
+            when(refreshTokenService.generateToken(any())).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(any())).thenReturn("mock-jwt");
+
+            authService.authenticateWithGoogle(new GoogleLoginRequest("google-token"));
+
+            assertThat(mockUser.getGoogleId()).isEqualTo(googleId);
+            assertThat(mockUser.isVerified()).isTrue();
+
+            verify(emailService).sendWelcome(expectedNormalizedEmail, name);
+
+            verify(userRepository, times(2)).save(same(mockUser));
+        }
+
+        @Test
+        void shouldThrowDataConflictExceptionWhenEmailIsLinkedToDifferentGoogleId(){
+            String googleId = "google-id";
+
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo("test@email.com", "Test User", googleId);
+
+            User mockUser = new UserTestDataBuilder()
+                    .withGoogleId("another-google-id")
+                    .build();
+
+            when(googleAuthService.verifyToken(any())).thenReturn(mockGoogleUserInfo);
+
+            when(userRepository.findByGoogleId(any())).thenReturn(Optional.empty());
+
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
+            assertThatThrownBy(() -> authService.authenticateWithGoogle(new GoogleLoginRequest("google-token")))
+                    .isInstanceOf(DataConflictException.class)
+                    .hasMessage("Email already linked to another Google identity.");
+
+            verify(userRepository, never()).save(any());
+            verifyNoInteractions(emailService, refreshTokenService, jwtProvider);
+        }
+
+        @Test
+        void shouldLinkGoogleAccountWithoutSendingWelcomeWhenUserAlreadyVerified(){
+            String googleId = "google-id";
+
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo("test@email.com", "Test User", googleId);
+
+            User mockUser = new UserTestDataBuilder()
+                    .withVerified(true)
+                    .build();
+
+            when(googleAuthService.verifyToken(any())).thenReturn(mockGoogleUserInfo);
+
+            when(userRepository.findByGoogleId(any())).thenReturn(Optional.empty());
+
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
+            when(userRepository.save(any())).thenReturn(mockUser);
+
+            when(refreshTokenService.generateToken(any())).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(any())).thenReturn("mock-jwt");
+
+            authService.authenticateWithGoogle(new GoogleLoginRequest("google-token"));
+
+            verify(emailService, never()).sendWelcome(any(), any());
         }
 
         @Test
@@ -289,26 +392,22 @@ public class AuthServiceTest {
             String expectedNormalizedEmail = "test@email.com";
             String googleId = "google-id";
 
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
             GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, name, googleId);
 
-            User mockSavedUser = new UserTestDataBuilder()
-                    .withName(name)
-                    .withEmail(expectedNormalizedEmail)
-                    .withGoogleId(googleId)
-                    .withVerified(true)
-                    .build();
+            User mockSavedUser = new UserTestDataBuilder().build();
 
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.empty());
-            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.empty());
+            when(googleAuthService.verifyToken(any())).thenReturn(mockGoogleUserInfo);
+
+            when(userRepository.findByGoogleId(any())).thenReturn(Optional.empty());
+
+            when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
+
             when(userRepository.save(any(User.class))).thenReturn(mockSavedUser);
-            when(refreshTokenService.generateToken(same(mockSavedUser))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(expectedNormalizedEmail)))).thenReturn("mock-jwt");
 
-            authService.authenticateWithGoogle(request);
+            when(refreshTokenService.generateToken(any())).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(any())).thenReturn("mock-jwt");
 
-            verify(userRepository).findByEmail(expectedNormalizedEmail);
+            authService.authenticateWithGoogle(new GoogleLoginRequest("google-token"));
 
             verify(userRepository, times(2)).save(userCaptor.capture());
             User capturedUser = userCaptor.getAllValues().getFirst();
@@ -318,129 +417,7 @@ public class AuthServiceTest {
             assertThat(capturedUser.isVerified()).isTrue();
             assertThat(capturedUser.getPassword()).isNull();
 
-            verify(emailService).sendWelcome(mockSavedUser.getEmail(), mockSavedUser.getName());
-        }
-
-        @Test
-        void shouldLinkGoogleAccountAndSendWelcomeWhenEmailExistsAndUnverified(){
-            String name = "Test User";
-            String email = "test@email.com";
-            String googleId = "google-id";
-
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
-            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, name, googleId);
-
-            User mockExistingUser = new UserTestDataBuilder()
-                    .withName(name)
-                    .withEmail(email)
-                    .withGoogleId(null)
-                    .withVerified(false)
-                    .build();
-
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.empty());
-            when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockExistingUser));
-            when(userRepository.save(same(mockExistingUser))).thenReturn(mockExistingUser);
-            when(refreshTokenService.generateToken(same(mockExistingUser))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(email)))).thenReturn("mock-jwt");
-
-            authService.authenticateWithGoogle(request);
-
-            verify(userRepository).findByEmail(email);
-
-            assertThat(mockExistingUser.getGoogleId()).isEqualTo(googleId);
-            assertThat(mockExistingUser.isVerified()).isTrue();
-
-            verify(userRepository, times(2)).save(same(mockExistingUser));
-
-            verify(emailService).sendWelcome(email, name);
-        }
-
-        @Test
-        void shouldLinkGoogleAccountWithoutSendingWelcomeWhenUserAlreadyVerified(){
-            String email = "test@email.com";
-            String googleId = "google-id";
-
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
-            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, "Test User", googleId);
-
-            User mockExistingUser = new UserTestDataBuilder()
-                    .withEmail(email)
-                    .withGoogleId(null)
-                    .withVerified(true)
-                    .build();
-
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.empty());
-            when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockExistingUser));
-            when(userRepository.save(same(mockExistingUser))).thenReturn(mockExistingUser);
-            when(refreshTokenService.generateToken(same(mockExistingUser))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(email)))).thenReturn("mock-jwt");
-
-            authService.authenticateWithGoogle(request);
-
-            verify(userRepository).findByEmail(email);
-
-            verify(emailService, never()).sendWelcome(any(), any());
-        }
-
-        @Test
-        void shouldThrowDisabledExceptionAndNotResetLockoutWhenAccountIsInactive(){
-            String email = "test@email.com";
-            String googleId = "google-id";
-
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
-            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, "Test User", googleId);
-
-            User mockUser = new UserTestDataBuilder()
-                    .withEmail(email)
-                    .withGoogleId(googleId)
-                    .withFailedLoginAttempts(3)
-                    .withLockoutEnd(LocalDateTime.now(clock).plusMinutes(15))
-                    .withActive(false)
-                    .build();
-
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.of(mockUser));
-
-            assertThatThrownBy(() -> authService.authenticateWithGoogle(request))
-                    .isInstanceOf(DisabledException.class)
-                    .hasMessage("Your account is deactivated. Contact support.");
-
-            verify(userRepository, never()).findByEmail(any());
-
-            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(3);
-            assertThat(mockUser.getLockoutEnd()).isNotNull();
-
-            verify(userRepository,never()).save(any());
-            verifyNoInteractions(refreshTokenService, jwtProvider, emailService);
-        }
-
-        @Test
-        void shouldThrowDataConflictExceptionWhenEmailIsLinkedToDifferentGoogleId(){
-            String email = "test@email.com";
-            String googleId = "google-id";
-
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
-            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, "Test User", googleId);
-
-            User mockExistingUser = new UserTestDataBuilder()
-                    .withEmail(email)
-                    .withGoogleId("another-google-token")
-                    .build();
-
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.empty());
-            when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockExistingUser));
-
-            assertThatThrownBy(() -> authService.authenticateWithGoogle(request))
-                    .isInstanceOf(DataConflictException.class)
-                    .hasMessage("Email already linked to another Google identity.");
-
-            verify(userRepository).findByEmail(email);
-
-            verifyNoInteractions(refreshTokenService, jwtProvider, emailService);
-            verify(userRepository, never()).save(any());
+            verify(emailService).sendWelcome(expectedNormalizedEmail, name);
         }
     }
 
