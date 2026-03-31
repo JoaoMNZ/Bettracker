@@ -3,6 +3,7 @@ package io.github.joaomnz.bettracker.service;
 import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
+import io.github.joaomnz.bettracker.enums.UserType;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
 import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
+@DisplayName("AuthService")
 @ExtendWith(MockitoExtension.class)
 public class AuthServiceTest {
     @Mock private UserRepository userRepository;
@@ -56,7 +58,6 @@ public class AuthServiceTest {
             String email = "  TEST@Email.com  ";
             String expectedNormalizedEmail = "test@email.com";
             String password = "Pass123!";
-            SignUpRequest request = new SignUpRequest(name, email, password);
 
             User mockSavedUser = new UserTestDataBuilder()
                     .withName(name)
@@ -64,36 +65,42 @@ public class AuthServiceTest {
                     .build();
 
             when(userRepository.existsByEmail(expectedNormalizedEmail)).thenReturn(false);
-            when(passwordEncoder.encode(password)).thenReturn("encoded-pass");
+
+            when(passwordEncoder.encode(password)).thenReturn("encoded-password");
             when(userRepository.save(any(User.class))).thenReturn(mockSavedUser);
 
-            when(otpTokenService.createOtp(same(mockSavedUser), eq(OtpPurpose.EMAIL_VERIFICATION), any(LocalDateTime.class))).thenReturn("123456");
+            LocalDateTime expectedExpiry = LocalDateTime.now(clock).plusHours(24);
+            when(otpTokenService.createOtp(same(mockSavedUser), eq(OtpPurpose.EMAIL_VERIFICATION), eq(expectedExpiry))).thenReturn("123456");
+
             when(refreshTokenService.generateToken(same(mockSavedUser))).thenReturn("mock-refresh");
             when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(expectedNormalizedEmail)))).thenReturn("mock-jwt");
 
-            AuthResponse response = authService.signUp(request);
+            AuthResponse response = authService.signUp(new SignUpRequest(name, email, password));
 
             verify(userRepository).save(userCaptor.capture());
             User capturedUser = userCaptor.getValue();
             assertThat(capturedUser.getName()).isEqualTo(name);
             assertThat(capturedUser.getEmail()).isEqualTo(expectedNormalizedEmail);
-            assertThat(capturedUser.getPassword()).isEqualTo("encoded-pass");
+            assertThat(capturedUser.getPassword()).isEqualTo("encoded-password");
 
-            assertThat(response).isNotNull();
+            verify(emailService).sendEmailVerificationCode(expectedNormalizedEmail, name, "123456");
+
             assertThat(response.refreshToken()).isEqualTo("mock-refresh");
             assertThat(response.accessToken()).isEqualTo("mock-jwt");
             assertThat(response.user().name()).isEqualTo(name);
             assertThat(response.user().email()).isEqualTo(expectedNormalizedEmail);
-
-            verify(emailService).sendEmailVerificationCode(expectedNormalizedEmail, name, "123456");
+            assertThat(response.user().unitValue()).isNull();
+            assertThat(response.user().userType()).isEqualTo(UserType.FREE);
+            assertThat(response.user().verified()).isFalse();
+            assertThat(response.user().passwordEnabled()).isTrue();
+            assertThat(response.user().googleLinked()).isFalse();
         }
 
         @Test
         void shouldThrowDataConflictExceptionWhenEmailIsAlreadyRegistered(){
-            SignUpRequest request = new SignUpRequest("Test User", "test@email.com", "Pass123!");
-            when(userRepository.existsByEmail("test@email.com")).thenReturn(true);
+            when(userRepository.existsByEmail(any())).thenReturn(true);
 
-            assertThatThrownBy(() -> authService.signUp(request))
+            assertThatThrownBy(() -> authService.signUp(new SignUpRequest("Test User", "test@email.com", "Pass123!")))
                     .isInstanceOf(DataConflictException.class)
                     .hasMessage("The email address is already registered.");
 
@@ -106,45 +113,37 @@ public class AuthServiceTest {
     @DisplayName("Sign In")
     class SignInTests {
         @Test
-        void shouldReturnTokensAndResetAttemptsWhenCredentialsAreValid(){
+        void shouldReturnTokensAndResetAttemptsAndLockoutWhenCredentialsAreValid(){
             String email = "  TEST@Email.com  ";
             String expectedNormalizedEmail = "test@email.com";
             String password = "Pass123!";
-
-            SignInRequest request = new SignInRequest(email, password);
 
             User mockUser = new UserTestDataBuilder()
                     .withEmail(expectedNormalizedEmail)
                     .withPassword(password)
                     .withFailedLoginAttempts(3)
+                    .withLockoutEnd(LocalDateTime.now(clock).minusMinutes(1))
                     .build();
 
             when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(mockUser));
+
             when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
             when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(expectedNormalizedEmail)))).thenReturn("mock-jwt");
 
-            AuthResponse response = authService.signIn(request);
-
-            assertThat(response).isNotNull();
-            assertThat(response.refreshToken()).isEqualTo("mock-refresh");
-            assertThat(response.accessToken()).isEqualTo("mock-jwt");
-            assertThat(response.user().email()).isEqualTo(expectedNormalizedEmail);
-
-            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
-            assertThat(mockUser.getLockoutEnd()).isNull();
+            authService.signIn(new SignInRequest(email, password));
 
             verify(authenticationManager).authenticate(argThat(token ->
                     Objects.equals(token.getPrincipal(), expectedNormalizedEmail) && Objects.equals(token.getCredentials(), password)
             ));
+            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
+            assertThat(mockUser.getLockoutEnd()).isNull();
         }
 
         @Test
-        void shouldThrowExceptionWhenEmailIsNotFound(){
-            SignInRequest request = new SignInRequest("test@email.com", "Pass123!");
+        void shouldThrowBusinessRuleExceptionWhenEmailIsNotFound(){
+            when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(BusinessRuleException.class)
                     .hasMessage("Invalid credentials.");
 
@@ -153,15 +152,13 @@ public class AuthServiceTest {
 
         @Test
         void shouldThrowBusinessRuleExceptionWhenPasswordIsNull(){
-            SignInRequest request = new SignInRequest("test@email.com", "Pass123!");
-
             User mockUser = new UserTestDataBuilder()
                     .withPassword(null)
                     .build();
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
 
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(BusinessRuleException.class)
                     .hasMessage("Invalid credentials.");
 
@@ -170,100 +167,74 @@ public class AuthServiceTest {
 
         @Test
         void shouldThrowLockedExceptionWhenAccountIsAlreadyLocked(){
-            SignInRequest request = new SignInRequest("test@email.com", "Pass123!");
-
             User mockUser = new UserTestDataBuilder()
                     .withLockoutEnd(LocalDateTime.now(clock).plusMinutes(15))
                     .build();
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
 
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(LockedException.class)
-                    .hasMessageContaining("Account is locked due to too many failed attempts. Please try again in 15 minute(s).");
+                    .hasMessage("Account is locked due to too many failed attempts. Please try again in 15 minute(s).");
 
             verifyNoInteractions(authenticationManager, refreshTokenService, jwtProvider);
         }
 
         @Test
-        void shouldAllowLoginAndResetAttemptsWhenLockoutHasExpired() {
-            String email = "test@email.com";
-            String password = "Pass123!";
-            SignInRequest request = new SignInRequest(email, password);
-
+        void shouldThrowDisabledExceptionWhenAccountIsDeactivated(){
             User mockUser = new UserTestDataBuilder()
-                    .withEmail(email)
-                    .withPassword(password)
                     .withFailedLoginAttempts(3)
                     .withLockoutEnd(LocalDateTime.now(clock).minusMinutes(1))
-                    .build();
-
-            when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
-            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(email)))).thenReturn("mock-jwt");
-
-            AuthResponse response = authService.signIn(request);
-
-            assertThat(response).isNotNull();
-
-            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
-            assertThat(mockUser.getLockoutEnd()).isNull();
-        }
-
-        @Test
-        void shouldThrowDisabledExceptionWhenAccountIsDeactivated(){
-            SignInRequest request = new SignInRequest("test@email.com", "Pass123!");
-
-            User mockUser = new UserTestDataBuilder()
                     .withActive(false)
                     .build();
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
             when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(DisabledException.class);
 
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(DisabledException.class);
+
+            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(3);
+            assertThat(mockUser.getLockoutEnd()).isNotNull();
 
             verifyNoInteractions(refreshTokenService, jwtProvider);
         }
 
         @Test
         void shouldIncrementFailedAttemptsWhenPasswordIsIncorrect(){
-            SignInRequest request = new SignInRequest("test@email.com", "wrong-password");
-
             User mockUser = new UserTestDataBuilder()
-                    .withPassword("Pass123!")
+                    .withFailedLoginAttempts(2)
                     .build();
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
             when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(BadCredentialsException.class);
 
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(BadCredentialsException.class);
 
-            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(1);
+            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(3);
 
             verifyNoInteractions(refreshTokenService, jwtProvider);
         }
 
         @Test
         void shouldLockAccountAndResetAttemptsOnFifthFailedLogin(){
-            SignInRequest request = new SignInRequest("test@email.com", "wrong-password");
-
             User mockUser = new UserTestDataBuilder()
-                    .withPassword("Pass123!")
                     .withFailedLoginAttempts(4)
                     .build();
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
             when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(BadCredentialsException.class);
 
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(LockedException.class)
                     .hasMessage("Account locked due to too many failed attempts. Please try again in 15 minutes.");
 
             assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
-            assertThat(mockUser.getLockoutEnd()).isNotNull();
+            assertThat(mockUser.getLockoutEnd()).isEqualTo(LocalDateTime.now(clock).plusMinutes(15));
 
             verifyNoInteractions(refreshTokenService, jwtProvider);
         }
@@ -276,41 +247,144 @@ public class AuthServiceTest {
 
         @Test
         void shouldAuthenticateReturningGoogleUserAndResetLockout(){
-            String name = "Test User";
-            String email = "test@email.com";
+            String token = "google-token";
             String googleId = "google-id";
 
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
-            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, name, googleId);
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo("test@email.com", "Test User", googleId);
 
             User mockUser = new UserTestDataBuilder()
-                    .withName(name)
-                    .withEmail(email)
-                    .withGoogleId(googleId)
                     .withFailedLoginAttempts(3)
                     .withLockoutEnd(LocalDateTime.now(clock).plusMinutes(15))
                     .build();
 
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.of(mockUser));
-            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(email)))).thenReturn("mock-jwt");
+            when(googleAuthService.verifyToken(token)).thenReturn(mockGoogleUserInfo);
 
-            AuthResponse response = authService.authenticateWithGoogle(request);
+            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.of(mockUser));
+
+            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(mockUser.getEmail())))).thenReturn("mock-jwt");
+
+            authService.authenticateWithGoogle(new GoogleLoginRequest(token));
 
             verify(userRepository, never()).findByEmail(any());
 
             assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
             assertThat(mockUser.getLockoutEnd()).isNull();
             verify(userRepository).save(same(mockUser));
+        }
 
-            assertThat(response).isNotNull();
-            assertThat(response.refreshToken()).isEqualTo("mock-refresh");
-            assertThat(response.accessToken()).isEqualTo("mock-jwt");
-            assertThat(response.user().name()).isEqualTo(name);
-            assertThat(response.user().email()).isEqualTo(email);
+        @Test
+        void shouldThrowDisabledExceptionAndNotResetLockoutWhenAccountIsInactive(){
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo("test@email.com", "Test User", "google-id");
 
-            verifyNoInteractions(emailService);
+            User mockUser = new UserTestDataBuilder()
+                    .withFailedLoginAttempts(3)
+                    .withLockoutEnd(LocalDateTime.now(clock).plusMinutes(15))
+                    .withActive(false)
+                    .build();
+
+            when(googleAuthService.verifyToken(any())).thenReturn(mockGoogleUserInfo);
+
+            when(userRepository.findByGoogleId(any())).thenReturn(Optional.of(mockUser));
+
+            assertThatThrownBy(() -> authService.authenticateWithGoogle(new GoogleLoginRequest("google-token")))
+                    .isInstanceOf(DisabledException.class)
+                    .hasMessage("Your account is deactivated. Contact support.");
+
+            verify(userRepository, never()).findByEmail(any());
+
+            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(3);
+            assertThat(mockUser.getLockoutEnd()).isNotNull();
+            verify(userRepository, never()).save(any());
+
+            verifyNoInteractions(refreshTokenService, jwtProvider);
+        }
+
+        @Test
+        void shouldLinkGoogleAccountAndSendWelcomeWhenEmailExistsAndUnverified(){
+            String name = "Test User";
+            String email = "  TEST@Email.com  ";
+            String expectedNormalizedEmail = "test@email.com";
+            String googleId = "google-id";
+
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, name, googleId);
+
+            User mockUser = new UserTestDataBuilder()
+                    .withName(name)
+                    .withEmail(expectedNormalizedEmail)
+                    .withGoogleId(null)
+                    .withVerified(false)
+                    .build();
+
+            when(googleAuthService.verifyToken(any())).thenReturn(mockGoogleUserInfo);
+
+            when(userRepository.findByGoogleId(any())).thenReturn(Optional.empty());
+
+            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(mockUser));
+
+            when(userRepository.save(same(mockUser))).thenReturn(mockUser);
+
+            when(refreshTokenService.generateToken(any())).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(any())).thenReturn("mock-jwt");
+
+            authService.authenticateWithGoogle(new GoogleLoginRequest("google-token"));
+
+            assertThat(mockUser.getGoogleId()).isEqualTo(googleId);
+            assertThat(mockUser.isVerified()).isTrue();
+
+            verify(emailService).sendWelcome(expectedNormalizedEmail, name);
+
+            verify(userRepository, times(2)).save(same(mockUser));
+        }
+
+        @Test
+        void shouldThrowDataConflictExceptionWhenEmailIsLinkedToDifferentGoogleId(){
+            String googleId = "google-id";
+
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo("test@email.com", "Test User", googleId);
+
+            User mockUser = new UserTestDataBuilder()
+                    .withGoogleId("another-google-id")
+                    .build();
+
+            when(googleAuthService.verifyToken(any())).thenReturn(mockGoogleUserInfo);
+
+            when(userRepository.findByGoogleId(any())).thenReturn(Optional.empty());
+
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
+            assertThatThrownBy(() -> authService.authenticateWithGoogle(new GoogleLoginRequest("google-token")))
+                    .isInstanceOf(DataConflictException.class)
+                    .hasMessage("Email already linked to another Google identity.");
+
+            verify(userRepository, never()).save(any());
+            verifyNoInteractions(emailService, refreshTokenService, jwtProvider);
+        }
+
+        @Test
+        void shouldLinkGoogleAccountWithoutSendingWelcomeWhenUserAlreadyVerified(){
+            String googleId = "google-id";
+
+            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo("test@email.com", "Test User", googleId);
+
+            User mockUser = new UserTestDataBuilder()
+                    .withVerified(true)
+                    .build();
+
+            when(googleAuthService.verifyToken(any())).thenReturn(mockGoogleUserInfo);
+
+            when(userRepository.findByGoogleId(any())).thenReturn(Optional.empty());
+
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
+            when(userRepository.save(any())).thenReturn(mockUser);
+
+            when(refreshTokenService.generateToken(any())).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(any())).thenReturn("mock-jwt");
+
+            authService.authenticateWithGoogle(new GoogleLoginRequest("google-token"));
+
+            verify(emailService, never()).sendWelcome(any(), any());
         }
 
         @Test
@@ -320,26 +394,22 @@ public class AuthServiceTest {
             String expectedNormalizedEmail = "test@email.com";
             String googleId = "google-id";
 
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
             GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, name, googleId);
 
-            User mockSavedUser = new UserTestDataBuilder()
-                    .withName(name)
-                    .withEmail(expectedNormalizedEmail)
-                    .withGoogleId(googleId)
-                    .withVerified(true)
-                    .build();
+            User mockSavedUser = new UserTestDataBuilder().build();
 
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.empty());
-            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.empty());
+            when(googleAuthService.verifyToken(any())).thenReturn(mockGoogleUserInfo);
+
+            when(userRepository.findByGoogleId(any())).thenReturn(Optional.empty());
+
+            when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
+
             when(userRepository.save(any(User.class))).thenReturn(mockSavedUser);
-            when(refreshTokenService.generateToken(same(mockSavedUser))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(expectedNormalizedEmail)))).thenReturn("mock-jwt");
 
-            authService.authenticateWithGoogle(request);
+            when(refreshTokenService.generateToken(any())).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(any())).thenReturn("mock-jwt");
 
-            verify(userRepository).findByEmail(expectedNormalizedEmail);
+            authService.authenticateWithGoogle(new GoogleLoginRequest("google-token"));
 
             verify(userRepository, times(2)).save(userCaptor.capture());
             User capturedUser = userCaptor.getAllValues().getFirst();
@@ -349,129 +419,7 @@ public class AuthServiceTest {
             assertThat(capturedUser.isVerified()).isTrue();
             assertThat(capturedUser.getPassword()).isNull();
 
-            verify(emailService).sendWelcome(mockSavedUser.getEmail(), mockSavedUser.getName());
-        }
-
-        @Test
-        void shouldLinkGoogleAccountAndSendWelcomeWhenEmailExistsAndUnverified(){
-            String name = "Test User";
-            String email = "test@email.com";
-            String googleId = "google-id";
-
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
-            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, name, googleId);
-
-            User mockExistingUser = new UserTestDataBuilder()
-                    .withName(name)
-                    .withEmail(email)
-                    .withGoogleId(null)
-                    .withVerified(false)
-                    .build();
-
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.empty());
-            when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockExistingUser));
-            when(userRepository.save(same(mockExistingUser))).thenReturn(mockExistingUser);
-            when(refreshTokenService.generateToken(same(mockExistingUser))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(email)))).thenReturn("mock-jwt");
-
-            authService.authenticateWithGoogle(request);
-
-            verify(userRepository).findByEmail(email);
-
-            assertThat(mockExistingUser.getGoogleId()).isEqualTo(googleId);
-            assertThat(mockExistingUser.isVerified()).isTrue();
-
-            verify(userRepository, times(2)).save(same(mockExistingUser));
-
-            verify(emailService).sendWelcome(email, name);
-        }
-
-        @Test
-        void shouldLinkGoogleAccountWithoutSendingWelcomeWhenUserAlreadyVerified(){
-            String email = "test@email.com";
-            String googleId = "google-id";
-
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
-            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, "Test User", googleId);
-
-            User mockExistingUser = new UserTestDataBuilder()
-                    .withEmail(email)
-                    .withGoogleId(null)
-                    .withVerified(true)
-                    .build();
-
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.empty());
-            when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockExistingUser));
-            when(userRepository.save(same(mockExistingUser))).thenReturn(mockExistingUser);
-            when(refreshTokenService.generateToken(same(mockExistingUser))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(email)))).thenReturn("mock-jwt");
-
-            authService.authenticateWithGoogle(request);
-
-            verify(userRepository).findByEmail(email);
-
-            verify(emailService, never()).sendWelcome(any(), any());
-        }
-
-        @Test
-        void shouldThrowDisabledExceptionAndNotResetLockoutWhenAccountIsInactive(){
-            String email = "test@email.com";
-            String googleId = "google-id";
-
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
-            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, "Test User", googleId);
-
-            User mockUser = new UserTestDataBuilder()
-                    .withEmail(email)
-                    .withGoogleId(googleId)
-                    .withFailedLoginAttempts(3)
-                    .withLockoutEnd(LocalDateTime.now(clock).plusMinutes(15))
-                    .withActive(false)
-                    .build();
-
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.of(mockUser));
-
-            assertThatThrownBy(() -> authService.authenticateWithGoogle(request))
-                    .isInstanceOf(DisabledException.class)
-                    .hasMessage("Your account is deactivated. Contact support.");
-
-            verify(userRepository, never()).findByEmail(any());
-
-            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(3);
-            assertThat(mockUser.getLockoutEnd()).isNotNull();
-
-            verify(userRepository,never()).save(any());
-            verifyNoInteractions(refreshTokenService, jwtProvider, emailService);
-        }
-
-        @Test
-        void shouldThrowDataConflictExceptionWhenEmailIsLinkedToDifferentGoogleId(){
-            String email = "test@email.com";
-            String googleId = "google-id";
-
-            GoogleLoginRequest request = new GoogleLoginRequest("google-token");
-            GoogleUserInfo mockGoogleUserInfo = new GoogleUserInfo(email, "Test User", googleId);
-
-            User mockExistingUser = new UserTestDataBuilder()
-                    .withEmail(email)
-                    .withGoogleId("another-google-token")
-                    .build();
-
-            when(googleAuthService.verifyToken(request.token())).thenReturn(mockGoogleUserInfo);
-            when(userRepository.findByGoogleId(googleId)).thenReturn(Optional.empty());
-            when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockExistingUser));
-
-            assertThatThrownBy(() -> authService.authenticateWithGoogle(request))
-                    .isInstanceOf(DataConflictException.class)
-                    .hasMessage("Email already linked to another Google identity.");
-
-            verify(userRepository).findByEmail(email);
-
-            verifyNoInteractions(refreshTokenService, jwtProvider, emailService);
-            verify(userRepository, never()).save(any());
+            verify(emailService).sendWelcome(expectedNormalizedEmail, name);
         }
     }
 
@@ -480,16 +428,14 @@ public class AuthServiceTest {
     class RefreshTokenTests {
         @Test
         void shouldReturnNewTokensWhenRefreshTokenIsValid(){
-            String token = "refresh-token";
-            User user = new UserTestDataBuilder()
-                    .withEmail("test@email.com")
-                    .build();
+            User mockUser = new UserTestDataBuilder().build();
 
-            when(refreshTokenService.consumeToken(token)).thenReturn(user);
-            when(refreshTokenService.generateToken(same(user))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals("test@email.com")))).thenReturn("mock-jwt");
+            when(refreshTokenService.consumeToken("refresh-token")).thenReturn(mockUser);
 
-            authService.refresh(new RefreshTokenRequest(token));
+            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
+            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(mockUser.getEmail())))).thenReturn("mock-jwt");
+
+            authService.refresh(new RefreshTokenRequest("refresh-token"));
         }
     }
 
@@ -498,11 +444,9 @@ public class AuthServiceTest {
     class LogoutTests {
         @Test
         void shouldRevokeTokenOnLogout(){
-            String token = "refresh-token";
+            authService.logout(new LogoutRequest("refresh-token"));
 
-            authService.logout(new LogoutRequest(token));
-
-            verify(refreshTokenService).revokeToken(token);
+            verify(refreshTokenService).revokeToken("refresh-token");
         }
     }
 
@@ -514,13 +458,15 @@ public class AuthServiceTest {
             String email = "  TEST@Email.com  ";
             String expectedNormalizedEmail = "test@email.com";
 
-            User user = new UserTestDataBuilder()
+            User mockUser = new UserTestDataBuilder()
                     .withName("Test User")
                     .withEmail(expectedNormalizedEmail)
                     .build();
 
-            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(user));
-            when(otpTokenService.createOtp(same(user), eq(OtpPurpose.PASSWORD_RESET), any(LocalDateTime.class))).thenReturn("123456");
+            when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(mockUser));
+
+            LocalDateTime expectedExpiry = LocalDateTime.now(clock).plusMinutes(15);
+            when(otpTokenService.createOtp(same(mockUser), eq(OtpPurpose.PASSWORD_RESET), eq(expectedExpiry))).thenReturn("123456");
 
             authService.forgotPassword(new ForgotPasswordRequest(email));
 
@@ -554,18 +500,22 @@ public class AuthServiceTest {
                     .build();
 
             when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(user));
+
             when(passwordEncoder.matches(newPassword, user.getPassword())).thenReturn(false);
+
             when(passwordEncoder.encode(newPassword)).thenReturn("encoded-password");
 
             authService.resetPassword(new ResetPasswordRequest(email, otp, newPassword));
 
             verify(otpTokenService).verifyOtp(same(user), eq(otp), eq(OtpPurpose.PASSWORD_RESET));
+
             assertThat(user.getPassword()).isEqualTo("encoded-password");
+
             verify(emailService).notifyPasswordChange(expectedNormalizedEmail, "Test User");
         }
 
         @Test
-        void shouldThrowWhenEmailIsNotRegistered(){
+        void shouldThrowResourceNotFoundExceptionWhenEmailIsNotRegistered(){
             when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest("test@email.com", "123456", "Pass123!")))
@@ -576,15 +526,31 @@ public class AuthServiceTest {
         }
 
         @Test
-        void shouldThrowWhenNewPasswordIsSameAsCurrentPassword(){
-            String newPassword = "Pass123!";
-
+        void shouldResetPasswordWhenUserHasNoCurrentPassword(){
             User user = new UserTestDataBuilder()
-                    .withPassword("Pass123!")
+                    .withPassword(null)
                     .build();
 
             when(userRepository.findByEmail(any())).thenReturn(Optional.of(user));
-            when(passwordEncoder.matches(newPassword, user.getPassword())).thenReturn(true);
+
+            when(passwordEncoder.encode(any())).thenReturn("encoded-password");
+
+            authService.resetPassword(new ResetPasswordRequest("test@email.com", "123456", "Pass123!"));
+
+            verify(passwordEncoder, never()).matches(any(), any());
+        }
+
+        @Test
+        void shouldThrowBusinessRuleExceptionWhenNewPasswordIsSameAsCurrentPassword(){
+            String newPassword = "Pass123!";
+
+            User mockUser = new UserTestDataBuilder()
+                    .withPassword("Pass123!")
+                    .build();
+
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
+            when(passwordEncoder.matches(any(), any())).thenReturn(true);
 
             assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest("test@email.com", "123456", newPassword)))
                     .isInstanceOf(BusinessRuleException.class)
@@ -604,7 +570,6 @@ public class AuthServiceTest {
             String otp = "123456";
 
             User user = new UserTestDataBuilder()
-                    .withId(userId)
                     .withName("Test User")
                     .withEmail("test@email.com")
                     .withVerified(false)
@@ -615,12 +580,14 @@ public class AuthServiceTest {
             authService.verifyEmail(userId, new EmailVerificationRequest(otp));
 
             verify(otpTokenService).verifyOtp(same(user), eq(otp), eq(OtpPurpose.EMAIL_VERIFICATION));
+
             assertThat(user.isVerified()).isTrue();
+
             verify(emailService).sendWelcome("test@email.com", "Test User");
         }
 
         @Test
-        void shouldThrowWhenUserIsNotFound(){
+        void shouldThrowResourceNotFoundExceptionWhenUserIsNotFound(){
             when(userRepository.findById(any())).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> authService.verifyEmail(1L, new EmailVerificationRequest("123456")))
@@ -631,7 +598,7 @@ public class AuthServiceTest {
         }
 
         @Test
-        void shouldThrowWhenUserIsAlreadyVerified(){
+        void shouldThrowBusinessRuleExceptionWhenUserIsAlreadyVerified(){
             User user = new UserTestDataBuilder()
                     .withVerified(true)
                     .build();
@@ -654,14 +621,15 @@ public class AuthServiceTest {
             Long userId = 1L;
 
             User user = new UserTestDataBuilder()
-                    .withId(userId)
                     .withName("Test User")
                     .withEmail("test@email.com")
                     .withVerified(false)
                     .build();
 
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(otpTokenService.createOtp(same(user), eq(OtpPurpose.EMAIL_VERIFICATION), any(LocalDateTime.class))).thenReturn("123456");
+
+            LocalDateTime expectedExpiry = LocalDateTime.now(clock).plusHours(24);
+            when(otpTokenService.createOtp(same(user), eq(OtpPurpose.EMAIL_VERIFICATION), eq(expectedExpiry))).thenReturn("123456");
 
             authService.resendEmailVerification(userId);
 
@@ -669,7 +637,7 @@ public class AuthServiceTest {
         }
 
         @Test
-        void shouldThrowWhenUserIsNotFound(){
+        void shouldThrowResourceNotFoundExceptionWhenUserIsNotFound(){
             when(userRepository.findById(any())).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> authService.resendEmailVerification(1L))
@@ -680,7 +648,7 @@ public class AuthServiceTest {
         }
 
         @Test
-        void shouldThrowWhenUserIsAlreadyVerified(){
+        void shouldThrowBusinessRuleExceptionWhenUserIsAlreadyVerified(){
             User user = new UserTestDataBuilder()
                     .withVerified(true)
                     .build();
