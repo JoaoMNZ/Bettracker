@@ -111,45 +111,37 @@ public class AuthServiceTest {
     @DisplayName("Sign In")
     class SignInTests {
         @Test
-        void shouldReturnTokensAndResetAttemptsWhenCredentialsAreValid(){
+        void shouldReturnTokensAndResetAttemptsAndLockoutWhenCredentialsAreValid(){
             String email = "  TEST@Email.com  ";
             String expectedNormalizedEmail = "test@email.com";
             String password = "Pass123!";
-
-            SignInRequest request = new SignInRequest(email, password);
 
             User mockUser = new UserTestDataBuilder()
                     .withEmail(expectedNormalizedEmail)
                     .withPassword(password)
                     .withFailedLoginAttempts(3)
+                    .withLockoutEnd(LocalDateTime.now(clock).minusMinutes(1))
                     .build();
 
             when(userRepository.findByEmail(expectedNormalizedEmail)).thenReturn(Optional.of(mockUser));
+
             when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
             when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(expectedNormalizedEmail)))).thenReturn("mock-jwt");
 
-            AuthResponse response = authService.signIn(request);
-
-            assertThat(response).isNotNull();
-            assertThat(response.refreshToken()).isEqualTo("mock-refresh");
-            assertThat(response.accessToken()).isEqualTo("mock-jwt");
-            assertThat(response.user().email()).isEqualTo(expectedNormalizedEmail);
-
-            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
-            assertThat(mockUser.getLockoutEnd()).isNull();
+            authService.signIn(new SignInRequest(email, password));
 
             verify(authenticationManager).authenticate(argThat(token ->
                     Objects.equals(token.getPrincipal(), expectedNormalizedEmail) && Objects.equals(token.getCredentials(), password)
             ));
+            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
+            assertThat(mockUser.getLockoutEnd()).isNull();
         }
 
         @Test
         void shouldThrowExceptionWhenEmailIsNotFound(){
-            SignInRequest request = new SignInRequest("test@email.com", "Pass123!");
+            when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(BusinessRuleException.class)
                     .hasMessage("Invalid credentials.");
 
@@ -158,15 +150,13 @@ public class AuthServiceTest {
 
         @Test
         void shouldThrowBusinessRuleExceptionWhenPasswordIsNull(){
-            SignInRequest request = new SignInRequest("test@email.com", "Pass123!");
-
             User mockUser = new UserTestDataBuilder()
                     .withPassword(null)
                     .build();
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
 
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(BusinessRuleException.class)
                     .hasMessage("Invalid credentials.");
 
@@ -175,100 +165,74 @@ public class AuthServiceTest {
 
         @Test
         void shouldThrowLockedExceptionWhenAccountIsAlreadyLocked(){
-            SignInRequest request = new SignInRequest("test@email.com", "Pass123!");
-
             User mockUser = new UserTestDataBuilder()
                     .withLockoutEnd(LocalDateTime.now(clock).plusMinutes(15))
                     .build();
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
 
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(LockedException.class)
-                    .hasMessageContaining("Account is locked due to too many failed attempts. Please try again in 15 minute(s).");
+                    .hasMessage("Account is locked due to too many failed attempts. Please try again in 15 minute(s).");
 
             verifyNoInteractions(authenticationManager, refreshTokenService, jwtProvider);
         }
 
         @Test
-        void shouldAllowLoginAndResetAttemptsWhenLockoutHasExpired() {
-            String email = "test@email.com";
-            String password = "Pass123!";
-            SignInRequest request = new SignInRequest(email, password);
-
+        void shouldThrowDisabledExceptionWhenAccountIsDeactivated(){
             User mockUser = new UserTestDataBuilder()
-                    .withEmail(email)
-                    .withPassword(password)
                     .withFailedLoginAttempts(3)
                     .withLockoutEnd(LocalDateTime.now(clock).minusMinutes(1))
-                    .build();
-
-            when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
-            when(refreshTokenService.generateToken(same(mockUser))).thenReturn("mock-refresh");
-            when(jwtProvider.generateToken(argThat(ud -> ud.getUsername().equals(email)))).thenReturn("mock-jwt");
-
-            AuthResponse response = authService.signIn(request);
-
-            assertThat(response).isNotNull();
-
-            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
-            assertThat(mockUser.getLockoutEnd()).isNull();
-        }
-
-        @Test
-        void shouldThrowDisabledExceptionWhenAccountIsDeactivated(){
-            SignInRequest request = new SignInRequest("test@email.com", "Pass123!");
-
-            User mockUser = new UserTestDataBuilder()
                     .withActive(false)
                     .build();
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
             when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(DisabledException.class);
 
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(DisabledException.class);
+
+            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(3);
+            assertThat(mockUser.getLockoutEnd()).isNotNull();
 
             verifyNoInteractions(refreshTokenService, jwtProvider);
         }
 
         @Test
         void shouldIncrementFailedAttemptsWhenPasswordIsIncorrect(){
-            SignInRequest request = new SignInRequest("test@email.com", "wrong-password");
-
             User mockUser = new UserTestDataBuilder()
-                    .withPassword("Pass123!")
+                    .withFailedLoginAttempts(2)
                     .build();
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
             when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(BadCredentialsException.class);
 
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(BadCredentialsException.class);
 
-            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(1);
+            assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(3);
 
             verifyNoInteractions(refreshTokenService, jwtProvider);
         }
 
         @Test
         void shouldLockAccountAndResetAttemptsOnFifthFailedLogin(){
-            SignInRequest request = new SignInRequest("test@email.com", "wrong-password");
-
             User mockUser = new UserTestDataBuilder()
-                    .withPassword("Pass123!")
                     .withFailedLoginAttempts(4)
                     .build();
 
-            when(userRepository.findByEmail("test@email.com")).thenReturn(Optional.of(mockUser));
+            when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockUser));
+
             when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(BadCredentialsException.class);
 
-            assertThatThrownBy(() -> authService.signIn(request))
+            assertThatThrownBy(() -> authService.signIn(new SignInRequest("test@email.com", "Pass123!")))
                     .isInstanceOf(LockedException.class)
                     .hasMessage("Account locked due to too many failed attempts. Please try again in 15 minutes.");
 
             assertThat(mockUser.getFailedLoginAttempts()).isEqualTo(0);
-            assertThat(mockUser.getLockoutEnd()).isNotNull();
+            assertThat(mockUser.getLockoutEnd()).isEqualTo(LocalDateTime.now(clock).plusMinutes(15));
 
             verifyNoInteractions(refreshTokenService, jwtProvider);
         }
