@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 @Service
@@ -21,6 +22,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final OtpTokenService otpTokenService;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public UserProfileResponse getProfile(Long userId){
@@ -55,6 +57,7 @@ public class UserService {
         }
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
+
         emailService.notifyPasswordChange(user.getEmail(), user.getName());
     }
 
@@ -67,6 +70,7 @@ public class UserService {
         }
 
         user.setPassword(passwordEncoder.encode(request.password()));
+
         emailService.notifyPasswordSet(user.getEmail(), user.getName());
     }
 
@@ -75,7 +79,7 @@ public class UserService {
         User user = getUserById(userId);
 
         if (user.getPassword() != null) {
-            if (request.currentPassword() == null ||!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            if (request.currentPassword() == null || !passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
                 throw new BusinessRuleException("Incorrect password.");
             }
         }
@@ -92,7 +96,8 @@ public class UserService {
 
         user.setPendingEmail(normalizedNewEmail);
 
-        String otp = otpTokenService.createOtp(user, OtpPurpose.EMAIL_CHANGE, LocalDateTime.now().plusMinutes(15));
+        String otp = otpTokenService.createOtp(user, OtpPurpose.EMAIL_CHANGE, LocalDateTime.now(clock).plusMinutes(15));
+
         emailService.sendEmailChangeCode(normalizedNewEmail, user.getName(), otp);
     }
 
@@ -129,6 +134,7 @@ public class UserService {
         }
 
         user.setActive(false);
+
         emailService.notifyAccountDeactivation(user.getEmail(), user.getName());
     }
 

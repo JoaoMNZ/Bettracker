@@ -4,24 +4,21 @@ import io.github.joaomnz.bettracker.model.User;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class UserTestDataBuilder {
-    private Long id;
     private String name = "Default Name";
     private String email = "default@email.com";
+    private String pendingEmail;
     private String password = "Pass123!";
     private String googleId;
     private int failedLoginAttempts = 0;
     private LocalDateTime lockoutEnd;
     private boolean active = true;
     private boolean verified = false;
+    private BigDecimal unitValue;
     private final PasswordEncoder ENCODER = new BCryptPasswordEncoder(8);
-
-    public UserTestDataBuilder withId(Long id){
-        this.id = id;
-        return this;
-    }
 
     public UserTestDataBuilder withName(String name){
         this.name = name;
@@ -30,6 +27,11 @@ public class UserTestDataBuilder {
 
     public UserTestDataBuilder withEmail(String email){
         this.email = email;
+        return this;
+    }
+
+    public UserTestDataBuilder withPendingEmail(String pendingEmail){
+        this.pendingEmail = pendingEmail;
         return this;
     }
 
@@ -63,17 +65,23 @@ public class UserTestDataBuilder {
         return this;
     }
 
+    public UserTestDataBuilder withUnitValue(BigDecimal unitValue){
+        this.unitValue = unitValue;
+        return this;
+    }
+
     public User build(){
         return User.builder()
-                .id(id)
                 .name(name)
                 .email(email)
+                .pendingEmail(pendingEmail)
                 .password(ENCODER.encode(password))
                 .googleId(googleId)
                 .failedLoginAttempts(failedLoginAttempts)
                 .lockoutEnd(lockoutEnd)
                 .active(active)
                 .verified(verified)
+                .unitValue(unitValue)
                 .build();
     }
 }
