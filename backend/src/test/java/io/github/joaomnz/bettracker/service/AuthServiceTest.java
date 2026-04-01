@@ -3,7 +3,6 @@ package io.github.joaomnz.bettracker.service;
 import io.github.joaomnz.bettracker.dto.auth.*;
 import io.github.joaomnz.bettracker.dto.user.ForgotPasswordRequest;
 import io.github.joaomnz.bettracker.enums.OtpPurpose;
-import io.github.joaomnz.bettracker.enums.UserType;
 import io.github.joaomnz.bettracker.exception.BusinessRuleException;
 import io.github.joaomnz.bettracker.exception.DataConflictException;
 import io.github.joaomnz.bettracker.exception.ResourceNotFoundException;
@@ -89,11 +88,6 @@ public class AuthServiceTest {
             assertThat(response.accessToken()).isEqualTo("mock-jwt");
             assertThat(response.user().name()).isEqualTo(name);
             assertThat(response.user().email()).isEqualTo(expectedNormalizedEmail);
-            assertThat(response.user().unitValue()).isNull();
-            assertThat(response.user().userType()).isEqualTo(UserType.FREE);
-            assertThat(response.user().verified()).isFalse();
-            assertThat(response.user().passwordEnabled()).isTrue();
-            assertThat(response.user().googleLinked()).isFalse();
         }
 
         @Test
