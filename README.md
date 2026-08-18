@@ -16,7 +16,7 @@
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white">
 </p>
 
-## Features
+## Planned Features
 
 * **Bet Logging:** Record your bets with fields like selection, stake, odds and status.
 * **Custom Data:** Link your bets to your own lists of bookmakers, tipsters, sports, and competitions.
